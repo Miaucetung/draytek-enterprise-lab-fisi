@@ -1,0 +1,102 @@
+graph TB
+    subgraph Internet
+        ISP[Internet/ISP]
+    end
+    
+    subgraph WAN
+        Modem[Modem/ONT]
+    end
+    
+    subgraph Router["DrayTek Vigor 2927ax<br/>192.168.99.1 (Mgmt)<br/>192.168.10.1 (Office)<br/>192.168.20.1 (Guest)<br/>192.168.30.1 (Lab)"]
+        RouterWAN[WAN1/WAN2]
+        RouterLAN[LAN Ports]
+        RouterWLAN[Integrated WLAN]
+    end
+    
+    subgraph Switch["Managed Switch<br/>192.168.99.2"]
+        Trunk[Port 24:  Trunk<br/>VLANs:  10,20,30,99]
+        Access10[Ports 1-10<br/>Access VLAN 10]
+        Access20[Ports 11-15<br/>Access VLAN 20]
+        Access30[Ports 16-20<br/>Access VLAN 30]
+        Access99[Port 21<br/>Access VLAN 99]
+    end
+    
+    subgraph AP["Access Point<br/>192.168.99.3"]
+        SSID1[SSID:  Company-Office<br/>VLAN 10, WPA2-Enterprise]
+        SSID2[SSID: Company-Guest<br/>VLAN 20, WPA2-PSK]
+        SSID3[SSID: Company-Lab<br/>VLAN 30, WPA2-PSK]
+        SSID4[SSID: Company-Mgmt<br/>VLAN 99, WPA2-Enterprise]
+    end
+    
+    subgraph VLAN10["VLAN 10 - Office<br/>192.168.10.0/24<br/>Trusted"]
+        PC1[Office PC 1<br/>. 100]
+        PC2[Office PC 2<br/>.101]
+        Printer[Printer<br/>.11]
+        FileServer[File Server<br/>. 10]
+    end
+    
+    subgraph VLAN20["VLAN 20 - Guest<br/>192.168.20.0/24<br/>Restricted"]
+        Guest1[Guest Device 1<br/>.100]
+        Guest2[Guest Device 2<br/>.101]
+    end
+    
+    subgraph VLAN30["VLAN 30 - Lab<br/>192.168.30.0/24<br/>Semi-Trusted"]
+        Dev1[Dev PC 1<br/>.100]
+        TestServer[Test Server<br/>.10]
+    end
+    
+    subgraph VLAN99["VLAN 99 - Management<br/>192.168.99.0/24<br/>Highly Trusted"]
+        AdminLaptop[Admin Laptop<br/>.20]
+        Syslog[Syslog Server<br/>.10]
+        Monitoring[Monitoring<br/>.11]
+        ADServer[AD Server<br/>192.168.50.10]
+    end
+    
+    ISP ---|"Internet"| Modem
+    Modem ---|"WAN"| RouterWAN
+    RouterLAN ---|"Trunk<br/>VLANs:  10,20,30,99"| Trunk
+    
+    Trunk --- Access10
+    Trunk --- Access20
+    Trunk --- Access30
+    Trunk --- Access99
+    
+    Access10 --- PC1
+    Access10 --- PC2
+    Access10 --- Printer
+    Access10 --- FileServer
+    
+    Access20 --- Guest1
+    Access20 --- Guest2
+    
+    Access30 --- Dev1
+    Access30 --- TestServer
+    
+    Access99 --- AdminLaptop
+    Access99 --- Syslog
+    Access99 --- Monitoring
+    
+    Trunk ---|"Trunk to AP"| AP
+    
+    SSID1 -.-|"VLAN 10"| PC1
+    SSID2 -.-|"VLAN 20"| Guest1
+    SSID3 -.-|"VLAN 30"| Dev1
+    SSID4 -.-|"VLAN 99"| AdminLaptop
+    
+    VLAN99 ---|"To VLAN 50"| ADServer
+    
+    classDef wan fill:#ff9999
+    classDef router fill:#99ccff
+    classDef switch fill:#99ff99
+    classDef vlan10 fill:#ffff99
+    classDef vlan20 fill:#ffcc99
+    classDef vlan30 fill:#cc99ff
+    classDef vlan99 fill:#ff99cc
+    
+    class ISP,Modem wan
+    class Router router
+    class Switch,AP switch
+    class VLAN10,PC1,PC2,Printer,FileServer vlan10
+    class VLAN20,Guest1,Guest2 vlan20
+    class VLAN30,Dev1,TestServer vlan30
+    class VLAN99,AdminLaptop,Syslog,Monitoring,ADServer vlan99

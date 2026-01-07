@@ -1,0 +1,587 @@
+# Firewall Policy Documentation
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+# Dieses YAML dokumentiert die Firewall-Strategie
+# Es ist NICHT die Router-Config, sondern die Design-Intention
+
+firewall: 
+  strategy: 
+    default_policy: "DENY_ALL"
+    principle:  "Least Privilege"
+    approach: "Zone-Based Firewall"
+    logging:   "Log all DENY, selective ALLOW"
+  
+  zones:
+    - name: "WAN"
+      trust_level: "Untrusted"
+      networks:  ["0.0.0.0/0"]
+      description: "Internet - completely untrusted"
+    
+    - name: "LAN"
+      trust_level: "Trusted"
+      networks: ["192.168.10.0/24"]
+      description: "Office network - employee workstations"
+    
+    - name: "GUEST"
+      trust_level: "Restricted"
+      networks: ["192.168.20.0/24"]
+      description: "Guest network - internet only"
+    
+    - name:  "LAB"
+      trust_level:  "Semi-Trusted"
+      networks:  ["192.168.30.0/24"]
+      description: "Development/testing network"
+    
+    - name: "MGMT"
+      trust_level: "Highly Trusted"
+      networks: ["192.168.99.0/24"]
+      description:  "Management network - infrastructure devices"
+    
+    - name: "DMZ"
+      trust_level: "Isolated"
+      networks: ["192.168.60.0/24"]
+      description: "Public-facing servers (optional)"
+
+  rules:
+    # Rule numbering:  
+    # 1-99:    Management rules (highest priority)
+    # 100-199: LAN outbound rules
+    # 200-299: Guest rules
+    # 300-399: Lab rules
+    # 400-499: WAN inbound rules (VPN, port forwarding)
+    # 500-599: Inter-VLAN rules
+    # 900-999: Logging and default deny
+    
+    - rule_id: 1
+      name: "Allow-Mgmt-to-All"
+      priority: 1
+      enabled: true
+      source_zone: "MGMT"
+      source_network: "192.168.99.0/24"
+      destination_zone: "any"
+      destination_network: "any"
+      service: 
+        protocol: "any"
+        ports: "any"
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Admins have full access from management network"
+      justification: "Required for network administration and troubleshooting"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      last_modified: "2026-01-05"
+      notes: "This rule must remain at top priority"
+    
+    - rule_id: 2
+      name:  "Deny-All-to-Mgmt"
+      priority: 2
+      enabled: true
+      source_zone: "any"
+      source_network: "any"
+      source_exclusions:
+        - "192.168.99.0/24"  # Except MGMT itself
+      destination_zone: "MGMT"
+      destination_network: "192.168.99.0/24"
+      service:
+        protocol: "any"
+        ports:  "any"
+      action: "DENY"
+      log: true
+      schedule: "always"
+      description: "Block all access to management network"
+      justification: "Security:  Management network must be isolated"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "CRITICAL"
+      notes: "Exception:  Admin PCs in other VLANs via separate rules"
+    
+    - rule_id: 100
+      name: "Allow-LAN-to-Internet"
+      priority: 100
+      enabled: true
+      source_zone: "LAN"
+      source_network: "192.168.10.0/24"
+      destination_zone: "WAN"
+      destination_network:  "any"
+      service:
+        protocol: "any"
+        ports:  "any"
+      action: "ALLOW"
+      log: false
+      schedule: "always"
+      description: "Office employees need full internet access"
+      justification:  "Business requirement:  Web browsing, email, cloud services"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      bandwidth_limit:  "none"
+      notes: "Consider content filtering for production"
+    
+    - rule_id: 101
+      name: "Allow-LAN-to-LAB"
+      priority: 101
+      enabled: true
+      source_zone: "LAN"
+      source_network: "192.168.10.0/24"
+      destination_zone: "LAB"
+      destination_network: "192.168.30.0/24"
+      service:
+        protocol:  "any"
+        ports: "any"
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Office can access lab resources for testing"
+      justification: "Office users need to test applications in lab"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      notes: "Logged for audit purposes"
+    
+    - rule_id: 102
+      name: "Deny-LAN-to-Guest"
+      priority: 102
+      enabled: true
+      source_zone: "LAN"
+      source_network: "192.168.10.0/24"
+      destination_zone: "GUEST"
+      destination_network: "192.168.20.0/24"
+      service:
+        protocol: "any"
+        ports: "any"
+      action:  "DENY"
+      log:  true
+      schedule: "always"
+      description: "Block Office from reaching Guest network"
+      justification: "Security: Guest network must be isolated"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "HIGH"
+    
+    - rule_id: 103
+      name: "Allow-LAN-Admin-to-Mgmt"
+      priority: 103
+      enabled: true
+      source_zone: "LAN"
+      source_network: "192.168.10.20/32"  # Specific admin PC
+      destination_zone: "MGMT"
+      destination_network: "192.168.99.0/24"
+      service: 
+        protocol: "tcp"
+        ports: [22, 443, 161, 514]  # SSH, HTTPS, SNMP, Syslog
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Allow specific admin PC to access management network"
+      justification:  "Admin PC needs management access"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      notes: "Only this one IP allowed from LAN to MGMT"
+    
+    - rule_id: 200
+      name: "Allow-Guest-to-Internet-HTTP"
+      priority: 200
+      enabled: true
+      source_zone: "GUEST"
+      source_network: "192.168.20.0/24"
+      destination_zone: "WAN"
+      destination_network:  "any"
+      service: 
+        protocol: "tcp"
+        ports: [80, 443]
+      action: "ALLOW"
+      log: false
+      schedule: "always"
+      description:  "Guests can access web (HTTP/HTTPS only)"
+      justification: "Basic internet access for guests"
+      created:  "2026-01-05"
+      created_by: "Lab Admin"
+      bandwidth_limit:  "10 Mbps per client"
+      notes: "Restricted to web traffic only"
+    
+    - rule_id: 201
+      name: "Allow-Guest-to-Internet-DNS"
+      priority: 201
+      enabled: true
+      source_zone: "GUEST"
+      source_network: "192.168.20.0/24"
+      destination_zone: "WAN"
+      destination_network: "any"
+      service:
+        protocol: "udp"
+        ports: [53]
+      action: "ALLOW"
+      log: false
+      schedule: "always"
+      description: "Guests need DNS resolution"
+      justification: "Required for name resolution"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+    
+    - rule_id: 202
+      name: "Allow-Guest-to-Internet-NTP"
+      priority: 202
+      enabled: true
+      source_zone: "GUEST"
+      source_network: "192.168.20.0/24"
+      destination_zone: "WAN"
+      destination_network:  "any"
+      service: 
+        protocol: "udp"
+        ports: [123]
+      action: "ALLOW"
+      log: false
+      schedule: "always"
+      description: "Guests need time synchronization"
+      justification:  "Required for device time sync"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+    
+    - rule_id:  203
+      name: "Deny-Guest-to-All-Internal"
+      priority: 203
+      enabled: true
+      source_zone: "GUEST"
+      source_network: "192.168.20.0/24"
+      destination_zone: ["LAN", "LAB", "MGMT", "DMZ"]
+      destination_network: ["192.168.10.0/24", "192.168.30.0/24", "192.168.99.0/24", "192.168.60.0/24"]
+      service:
+        protocol:  "any"
+        ports: "any"
+      action: "DENY"
+      log: true
+      schedule: "always"
+      description: "Block all guest access to internal networks"
+      justification: "Security: Complete guest isolation"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "CRITICAL"
+      notes: "This is essential for guest network security"
+    
+    - rule_id: 300
+      name: "Allow-LAB-to-Internet"
+      priority: 300
+      enabled:  true
+      source_zone: "LAB"
+      source_network: "192.168.30.0/24"
+      destination_zone: "WAN"
+      destination_network: "any"
+      service:
+        protocol: "any"
+        ports: "any"
+      action: "ALLOW"
+      log: false
+      schedule: "always"
+      description: "Lab needs full internet for development"
+      justification: "Developers need unrestricted internet access"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+    
+    - rule_id:  301
+      name: "Allow-LAB-to-LAN"
+      priority: 301
+      enabled: true
+      source_zone: "LAB"
+      source_network: "192.168.30.0/24"
+      destination_zone: "LAN"
+      destination_network:  "192.168.10.0/24"
+      service: 
+        protocol: "any"
+        ports: "any"
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Lab can access office resources for integration testing"
+      justification: "Developers need to test against production-like environment"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      notes: "Logged for security audit"
+    
+    - rule_id: 302
+      name: "Deny-LAB-to-Guest"
+      priority: 302
+      enabled: true
+      source_zone: "LAB"
+      source_network: "192.168.30.0/24"
+      destination_zone: "GUEST"
+      destination_network:  "192.168.20.0/24"
+      service: 
+        protocol: "any"
+        ports: "any"
+      action: "DENY"
+      log: true
+      schedule: "always"
+      description: "Block lab from guest network"
+      justification: "No reason for lab to access guest network"
+      created:  "2026-01-05"
+      created_by: "Lab Admin"
+    
+    - rule_id: 400
+      name: "Allow-VPN-IPSec-Inbound"
+      priority: 400
+      enabled: true
+      source_zone: "WAN"
+      source_network:  "any"
+      destination_zone: "ROUTER"
+      destination_network: "WAN-IP"
+      service:
+        protocol: "udp"
+        ports: [500, 4500]  # IKE and NAT-T
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Allow IPSec VPN connections from internet"
+      justification: "Required for site-to-site and remote access VPN"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "HIGH"
+      notes: "IPSec traffic encrypted, but log connection attempts"
+    
+    - rule_id: 401
+      name:  "Allow-VPN-SSL-Inbound"
+      priority: 401
+      enabled: true
+      source_zone: "WAN"
+      source_network:  "any"
+      destination_zone: "ROUTER"
+      destination_network: "WAN-IP"
+      service:
+        protocol: "tcp"
+        ports:  [443]
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description:  "Allow SSL VPN connections from internet"
+      justification: "Required for remote user VPN access"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      rate_limit: "10 connections per minute per IP"
+      notes: "Consider rate limiting to prevent brute force"
+    
+    - rule_id: 402
+      name: "Allow-Port-Forward-Web-to-DMZ"
+      priority: 402
+      enabled: false  # Disabled by default, enable when DMZ active
+      source_zone: "WAN"
+      source_network:  "any"
+      destination_zone: "DMZ"
+      destination_network: "192.168.60.10/32"  # Web server in DMZ
+      service: 
+        protocol: "tcp"
+        ports: [80, 443]
+      action: "ALLOW"
+      log: true
+      schedule: "always"
+      description: "Port forward web traffic to DMZ web server"
+      justification: "Public website hosted in DMZ"
+      created:  "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "MEDIUM"
+      notes: "Only enable when DMZ is configured"
+    
+    - rule_id: 500
+      name: "Deny-DMZ-to-Internal"
+      priority: 500
+      enabled: true
+      source_zone: "DMZ"
+      source_network: "192.168.60.0/24"
+      destination_zone: ["LAN", "LAB", "MGMT"]
+      destination_network: ["192.168.10.0/24", "192.168.30.0/24", "192.168.99.0/24"]
+      service:
+        protocol: "any"
+        ports: "any"
+      action: "DENY"
+      log: true
+      schedule: "always"
+      description: "DMZ servers cannot reach internal networks"
+      justification:  "Security: DMZ isolation (if compromised, internal network safe)"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "CRITICAL"
+      notes: "Essential for DMZ security model"
+    
+    - rule_id: 900
+      name: "Log-Suspicious-Traffic"
+      priority: 900
+      enabled: true
+      source_zone: "any"
+      source_network: "any"
+      destination_zone: "any"
+      destination_network: "any"
+      service:
+        protocol: "tcp"
+        ports: [23, 21, 445, 3389]  # Telnet, FTP, SMB, RDP from WAN
+      action: "DENY"
+      log: true
+      schedule: "always"
+      description: "Log and block common attack protocols"
+      justification: "Security: Detect potential attacks"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "HIGH"
+      notes: "Review logs regularly for attack attempts"
+    
+    - rule_id: 999
+      name: "Default-Deny-All"
+      priority: 999
+      enabled:  true
+      source_zone: "any"
+      source_network:  "any"
+      destination_zone: "any"
+      destination_network: "any"
+      service:
+        protocol: "any"
+        ports: "any"
+      action: "DENY"
+      log: true
+      schedule:  "always"
+      description: "Default deny - catch all unmatched traffic"
+      justification: "Security: Default deny policy"
+      created: "2026-01-05"
+      created_by: "Lab Admin"
+      security_level: "CRITICAL"
+      notes: "This rule must always be last in priority order"
+
+  nat_rules:
+    - nat_id: 1
+      name: "NAT-LAN-to-Internet"
+      enabled: true
+      source_network:  "192.168.10.0/24"
+      destination:  "WAN"
+      nat_type: "PAT"  # Port Address Translation (many-to-one)
+      translated_address: "WAN-IP"
+      description: "Office network NAT to internet"
+    
+    - nat_id: 2
+      name: "NAT-Guest-to-Internet"
+      enabled: true
+      source_network: "192.168.20.0/24"
+      destination: "WAN"
+      nat_type: "PAT"
+      translated_address: "WAN-IP"
+      description: "Guest network NAT to internet"
+    
+    - nat_id:  3
+      name: "NAT-LAB-to-Internet"
+      enabled: true
+      source_network: "192.168.30.0/24"
+      destination:  "WAN"
+      nat_type: "PAT"
+      translated_address: "WAN-IP"
+      description: "Lab network NAT to internet"
+    
+    - nat_id: 4
+      name: "Port-Forward-Web-to-DMZ"
+      enabled: false
+      source:  "WAN"
+      destination_port: 80
+      translated_ip: "192.168.60.10"
+      translated_port: 80
+      protocol: "tcp"
+      description:  "Forward HTTP to DMZ web server"
+    
+    - nat_id: 5
+      name: "Port-Forward-HTTPS-to-DMZ"
+      enabled: false
+      source:  "WAN"
+      destination_port: 443
+      translated_ip: "192.168.60.10"
+      translated_port: 443
+      protocol: "tcp"
+      description: "Forward HTTPS to DMZ web server"
+
+  dos_protection:
+    enabled: true
+    syn_flood: 
+      enabled: true
+      threshold: 200  # packets per second
+    udp_flood:
+      enabled:  true
+      threshold: 500
+    icmp_flood: 
+      enabled: true
+      threshold:  50
+    port_scan_detection:
+      enabled: true
+      threshold: 20  # ports in 10 seconds
+    ip_spoofing_protection:
+      enabled: true
+    ping_of_death_protection:
+      enabled: true
+
+  intrusion_prevention:
+    enabled: false  # Optional, can impact performance
+    mode: "monitor"  # or "block"
+    signatures_updated: "2026-01-01"
+    categories:
+      - "SQL Injection"
+      - "Cross-Site Scripting"
+      - "Buffer Overflow"
+      - "DoS Attacks"
+    notes: "Enable only if performance is acceptable"
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial firewall policy created"
+      - "Defined zones and base rules"
+      - "Implemented least-privilege model"
+    author: "Lab Admin"
+  
+  - date: "2026-01-10"
+    version:  "1.1"
+    changes:
+      - "Added VPN inbound rules"
+      - "Refined guest network restrictions"
+      - "Added DoS protection settings"
+    author: "Lab Admin"
+
+validation: 
+  tests:
+    - test_id:  "FW-001"
+      description: "Office can reach internet"
+      command: "ping 8.8.8.8 from 192.168.10.100"
+      expected:  "success"
+      status: "PENDING"
+    
+    - test_id: "FW-002"
+      description: "Guest blocked from office"
+      command: "ping 192.168.10.100 from 192.168.20.100"
+      expected: "timeout (blocked)"
+      status: "PENDING"
+    
+    - test_id: "FW-003"
+      description: "Management accessible only from admin IPs"
+      command: "https://192.168.99.1 from 192.168.10.50"
+      expected: "blocked (not in admin IP range)"
+      status: "PENDING"
+
+notes:  |
+  Firewall Policy Notes:
+  
+  1. Rule Priority: Lower numbers = higher priority
+  2. Rules evaluated top-to-bottom, first match wins
+  3. Default deny at end (rule 999) catches all unmatched
+  4. All DENY rules must log for security audit
+  5. Selective logging on ALLOW rules to avoid log noise
+  
+  For IHK Documentation:
+  - Include rule table with justifications
+  - Document security zones and trust levels
+  - Explain default deny policy
+  - Provide test results showing rules work
+  
+  Maintenance: 
+  - Review rules quarterly
+  - Remove unused rules
+  - Update justifications if business needs change
+  - Test after any changes
+  
+  Security Considerations:
+  - Management zone is most critical
+  - Guest isolation prevents lateral movement
+  - DMZ isolation protects internal if DMZ compromised
+  - DoS protection prevents resource exhaustion
+  - Rate limiting on VPN prevents brute force

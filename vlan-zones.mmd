@@ -1,0 +1,93 @@
+graph TD
+    subgraph WAN["WAN Zone - Untrusted"]
+        Internet[Internet<br/>Untrusted]
+    end
+    
+    subgraph Router["DrayTek Router - Security Gateway"]
+        FW[Zone-Based Firewall<br/>Default:  DENY ALL]
+        NAT[NAT/PAT]
+        VPN[VPN Gateway]
+    end
+    
+    subgraph MGMT["Management Zone - Highly Trusted<br/>VLAN 99:  192.168.99.0/24"]
+        MgmtDevices[Network Devices<br/>Router, Switch, AP]
+        MgmtServers[Infrastructure Servers<br/>Syslog, Monitoring, AD]
+        AdminPC[Admin Workstations]
+    end
+    
+    subgraph LAN["LAN Zone - Trusted<br/>VLAN 10: 192.168.10.0/24"]
+        OfficePCs[Employee Workstations]
+        Printers[Printers/Scanners]
+        FileServers[File Servers]
+    end
+    
+    subgraph LAB["Lab Zone - Semi-Trusted<br/>VLAN 30: 192.168.30.0/24"]
+        DevPCs[Development PCs]
+        TestServers[Test Servers]
+        Sandbox[Sandbox Environment]
+    end
+    
+    subgraph GUEST["Guest Zone - Restricted<br/>VLAN 20: 192.168.20.0/24"]
+        GuestDevices[Guest Devices<br/>Client Isolation Enabled]
+    end
+    
+    subgraph DMZ["DMZ Zone - Isolated<br/>VLAN 60: 192.168.60.0/24<br/>(Optional)"]
+        WebServer[Public Web Server]
+        MailServer[Mail Server]
+    end
+    
+    Internet -->|"VPN Only"| VPN
+    Internet -->|"Port Forward<br/>80,443"| FW
+    FW -->|"Limited"| DMZ
+    
+    VPN -->|"Full Access<br/>(Admin VPN)"| MGMT
+    VPN -->|"Standard Access"| LAN
+    
+    FW -->|"Full Control"| MGMT
+    FW -->|"Allow All"| LAN
+    FW -->|"Allow All"| LAB
+    FW -->|"HTTP/HTTPS Only"| GUEST
+    
+    MGMT -->|"✅ Full Access"| LAN
+    MGMT -->|"✅ Full Access"| LAB
+    MGMT -->|"✅ Full Access"| GUEST
+    MGMT -->|"✅ Full Access"| DMZ
+    
+    LAN -->|"✅ Allow"| LAB
+    LAN -->|"❌ Deny"| GUEST
+    LAN -->|"✅ Allow (specific)"| DMZ
+    
+    LAB -->|"✅ Allow"| LAN
+    LAB -->|"❌ Deny"| GUEST
+    
+    GUEST -->|"❌ Deny All"| LAN
+    GUEST -->|"❌ Deny All"| LAB
+    GUEST -->|"❌ Deny All"| MGMT
+    GUEST -->|"❌ Deny All"| DMZ
+    
+    DMZ -->|"❌ Deny All"| LAN
+    DMZ -->|"❌ Deny All"| LAB
+    DMZ -->|"❌ Deny All"| MGMT
+    DMZ -->|"❌ Deny All"| GUEST
+    DMZ -->|"✅ Allow (limited)"| Internet
+    
+    Internet -->|"✅ Allow"| NAT
+    NAT --> LAN
+    NAT --> LAB
+    NAT --> GUEST
+    
+    classDef untrusted fill:#ff9999,stroke:#cc0000,stroke-width:3px
+    classDef highTrust fill:#99ff99,stroke:#00cc00,stroke-width:3px
+    classDef trusted fill:#99ccff,stroke:#0066cc,stroke-width:2px
+    classDef semiTrust fill:#cc99ff,stroke:#9933cc,stroke-width:2px
+    classDef restricted fill:#ffcc99,stroke:#ff6600,stroke-width:2px
+    classDef isolated fill:#ffff99,stroke:#cccc00,stroke-width:2px
+    classDef gateway fill:#cccccc,stroke:#666666,stroke-width:3px
+    
+    class Internet,WAN untrusted
+    class MGMT,MgmtDevices,MgmtServers,AdminPC highTrust
+    class LAN,OfficePCs,Printers,FileServers trusted
+    class LAB,DevPCs,TestServers,Sandbox semiTrust
+    class GUEST,GuestDevices restricted
+    class DMZ,WebServer,MailServer isolated
+    class Router,FW,NAT,VPN gateway

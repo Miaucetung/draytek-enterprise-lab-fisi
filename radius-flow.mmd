@@ -1,0 +1,80 @@
+sequenceDiagram
+    participant Client as Wireless Client<br/>(Supplicant)
+    participant AP as Access Point<br/>(Authenticator)<br/>192.168.99.3
+    participant Router as DrayTek Router<br/>(RADIUS Server)<br/>192.168.99.1
+    participant AD as Active Directory<br/>(LDAP Backend)<br/>192.168.50.10
+    
+    Note over Client,AD: Phase 1: Connection Initiation
+    Client->>AP: 1. Association Request<br/>(SSID:  Company-Office)
+    AP->>Client: 2. Association Response<br/>(Connected, but not authenticated)
+    
+    Note over Client,AD: Phase 2: EAP Authentication Start
+    AP->>Client: 3. EAP-Request Identity
+    Client->>AP: 4. EAP-Response Identity<br/>(Username: max. mustermann)
+    
+    Note over Client,AD: Phase 3: RADIUS Authentication Request
+    AP->>Router: 5. RADIUS Access-Request<br/>(Username, NAS-IP, NAS-Port)
+    
+    Note over Router:  Router checks: <br/>- Is AP (192.168.99.3) allowed NAS? <br/>- Is Shared Secret correct?
+    
+    alt LDAP/AD Backend Enabled
+        Router->>AD: 6a. LDAP Bind<br/>(Service Account)
+        AD->>Router: 6b.  Bind Success
+        Router->>AD: 7a. LDAP Search<br/>(sAMAccountName=max.mustermann)
+        AD->>Router: 7b.  User Found + Attributes<br/>(Groups, VLAN, etc.)
+        Router->>AD: 8a. LDAP Bind as User<br/>(User Credentials)
+        
+        alt Correct Password
+            AD->>Router: 8b.  Authentication Success<br/>(User validated)
+        else Wrong Password
+            AD->>Router:  8c. Authentication Failed
+            Router->>AP:  RADIUS Access-Reject<br/>(EAP-Failure)
+            AP->>Client: EAP-Failure<br/>❌ Authentication Failed
+        end
+    else Internal RADIUS Database
+        Note over Router:  Check internal database: <br/>- Username exists?<br/>- Password correct? <br/>- User enabled?
+    end
+    
+    Note over Client,AD: Phase 4: Challenge/Response (EAP-PEAP/TTLS)
+    Router->>AP: 9. RADIUS Access-Challenge<br/>(EAP-Request with method)
+    AP->>Client: 10. EAP-Request
+    Client->>AP: 11. EAP-Response<br/>(Encrypted credentials)
+    AP->>Router: 12. RADIUS Access-Request<br/>(Continued)
+    
+    Note over Router: Final authentication check:<br/>- Credentials valid?<br/>- User in correct group? <br/>- Determine VLAN assignment
+    
+    Note over Client,AD: Phase 5: Access Decision
+    alt Authentication Successful
+        Router->>AP: 13. RADIUS Access-Accept<br/>✅ VLAN-ID=10 (if dynamic)<br/>Session-Timeout, Filter-ID
+        AP->>Client: 14. EAP-Success<br/>✅ Authentication Successful
+        
+        Note over AP: AP assigns client to VLAN 10<br/>(based on RADIUS attributes)
+        
+        AP->>Client: 15. 4-Way Handshake<br/>(WPA2 Key Exchange)
+        Client->>AP:  16. Key Installation
+        
+        Note over Client:  Client now fully connected: <br/>- VLAN 10 (192.168.10.x)<br/>- Can request DHCP<br/>- Can access network
+        
+        Client->>Router: 17. DHCP Discover<br/>(VLAN 10)
+        Router->>Client: 18. DHCP Offer<br/>(192.168.10.105)
+        Client->>Router:  19. DHCP Request
+        Router->>Client: 20. DHCP Ack<br/>✅ IP:  192.168.10.105<br/>Gateway: 192.168.10.1
+        
+    else Authentication Failed
+        Router->>AP: 13. RADIUS Access-Reject<br/>❌ (Wrong credentials or user not found)
+        AP->>Client:  14. EAP-Failure<br/>❌ Authentication Failed
+        AP->>Client: 15. Deauthentication<br/>(Client disconnected)
+    end
+    
+    Note over Client,AD:  Phase 6: Accounting (Optional)
+    Router->>Router: Log Authentication: <br/>- User:  max.mustermann<br/>- Result: Success/Failure<br/>- Timestamp, Source IP
+    
+    alt RADIUS Accounting Enabled
+        AP->>Router:  RADIUS Accounting-Request Start<br/>(Session started, User, IP)
+        Router->>AP:  RADIUS Accounting-Response
+        
+        Note over Client:  User browses network... 
+        
+        AP->>Router: RADIUS Accounting-Request Stop<br/>(Session ended, Duration, Bytes)
+        Router->>AP:  RADIUS Accounting-Response
+    end

@@ -1,0 +1,593 @@
+# RADIUS User Database Documentation
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+# Dieses YAML dokumentiert RADIUS-Benutzer und -Gruppen
+# NICHT die tatsächliche Router-Config, sondern Design-Dokumentation
+
+radius_server:
+  type: "Internal DrayTek RADIUS"
+  ip: "192.168.99.1"
+  ports: 
+    authentication:  1812
+    accounting: 1813
+  shared_secret: "PLACEHOLDER_RADIUS_SHARED_SECRET_32_CHARS"
+  
+  features:
+    - "802.1X Wireless Authentication"
+    - "VPN User Authentication"
+    - "VLAN Assignment (dynamic)"
+    - "Accounting (session tracking)"
+    - "LDAP Backend Integration"
+  
+  backend:
+    type: "Internal Database"  # or "LDAP/Active Directory"
+    ldap_server: "192.168.50.10"  # If LDAP backend
+    ldap_enabled: false  # Set true for LAB-09
+
+nas_clients:
+  - name: "DrayTek Router (Self)"
+    ip: "192.168.99.1"
+    shared_secret: "PLACEHOLDER_RADIUS_SHARED_SECRET"
+    description: "Router's internal RADIUS client"
+    enabled: true
+  
+  - name: "Access Point 1"
+    ip: "192.168.99.3"
+    shared_secret: "PLACEHOLDER_AP1_RADIUS_SECRET"
+    description: "Wireless Access Point 1"
+    enabled: true
+    vendor: "UniFi / TP-Link / DrayTek"
+  
+  - name: "Access Point 2"
+    ip: "192.168.99.4"
+    shared_secret: "PLACEHOLDER_AP2_RADIUS_SECRET"
+    description: "Wireless Access Point 2"
+    enabled:  true
+    vendor: "UniFi / TP-Link / DrayTek"
+  
+  - name: "Switch (if 802.1X port auth)"
+    ip: "192.168.99.2"
+    shared_secret: "PLACEHOLDER_SWITCH_RADIUS_SECRET"
+    description: "Managed switch for wired 802.1X"
+    enabled: false  # Enable if implementing wired 802.1X
+    vendor: "Cisco / HP / Netgear"
+
+user_groups:
+  - group_id: 1
+    name: "IT-Admins"
+    description: "IT administrators with full access"
+    vlan:  99
+    session_timeout: 0  # No timeout
+    idle_timeout: 0
+    bandwidth_limit: "unlimited"
+    filter_id: "admin-filter"
+    permissions:
+      - "Full network access"
+      - "Management access"
+      - "All VLANs accessible"
+    notes: "Highest privilege group"
+  
+  - group_id: 2
+    name: "Employees"
+    description: "Regular office employees"
+    vlan: 10
+    session_timeout: 28800  # 8 hours
+    idle_timeout: 3600  # 1 hour
+    bandwidth_limit: "unlimited"
+    filter_id: "employee-filter"
+    permissions: 
+      - "Office VLAN access"
+      - "Internet access"
+      - "Lab VLAN access (for testing)"
+      - "No management access"
+    notes: "Standard user group"
+  
+  - group_id: 3
+    name: "Contractors"
+    description: "External contractors/temporary workers"
+    vlan: 30
+    session_timeout: 14400  # 4 hours
+    idle_timeout: 1800  # 30 minutes
+    bandwidth_limit: "50 Mbps"
+    filter_id: "contractor-filter"
+    permissions:
+      - "Lab VLAN access only"
+      - "Internet access (limited)"
+      - "No office resources"
+      - "No management access"
+    notes: "Restricted access for external users"
+  
+  - group_id: 4
+    name:  "Guests"
+    description:  "Temporary guest access (alternative to Guest WiFi PSK)"
+    vlan: 20
+    session_timeout: 3600  # 1 hour
+    idle_timeout: 600  # 10 minutes
+    bandwidth_limit: "10 Mbps"
+    filter_id: "guest-filter"
+    permissions:
+      - "Internet only (HTTP/HTTPS)"
+      - "No internal network access"
+    notes: "Minimal access, short session"
+
+users:
+  # IT Admins Group
+  - user_id: 1
+    username: "admin. user"
+    password: "PLACEHOLDER_ADMIN_USER_PASSWORD"
+    full_name: "Administrator User"
+    email: "admin. user@company.local"
+    group:  "IT-Admins"
+    vlan: 99
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout:  false
+    notes: "Primary admin account"
+    
+  - user_id: 2
+    username: "network.admin"
+    password: "PLACEHOLDER_NETWORK_ADMIN_PASSWORD"
+    full_name: "Network Administrator"
+    email: "netadmin@company.local"
+    group: "IT-Admins"
+    vlan: 99
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout: false
+    notes:  "Network specialist admin"
+  
+  # Employees Group
+  - user_id: 10
+    username: "max.mustermann"
+    password: "PLACEHOLDER_USER_PASSWORD"
+    full_name: "Max Mustermann"
+    email: "max.mustermann@company.local"
+    department: "Sales"
+    group: "Employees"
+    vlan: 10
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "2027-01-05"
+    failed_login_count: 0
+    lockout: false
+    mac_address: "aa:bb:cc:dd:ee:10"  # Optional MAC binding
+    notes: "Regular employee"
+  
+  - user_id: 11
+    username: "erika.musterfrau"
+    password:  "PLACEHOLDER_USER_PASSWORD"
+    full_name: "Erika Musterfrau"
+    email: "erika.musterfrau@company.local"
+    department: "Marketing"
+    group: "Employees"
+    vlan:  10
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "2027-01-05"
+    failed_login_count: 0
+    lockout: false
+    mac_address: "aa:bb:cc: dd:ee:11"
+    notes: "Regular employee"
+  
+  - user_id: 12
+    username: "john.doe"
+    password: "PLACEHOLDER_USER_PASSWORD"
+    full_name: "John Doe"
+    email: "john.doe@company.local"
+    department: "Development"
+    group: "Employees"
+    vlan: 10
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "2027-01-05"
+    failed_login_count: 0
+    lockout:  false
+    notes: "Developer with office access"
+  
+  # Contractors Group
+  - user_id: 20
+    username: "contractor.dev1"
+    password: "PLACEHOLDER_CONTRACTOR_PASSWORD"
+    full_name: "External Developer 1"
+    email: "dev1@external.com"
+    company: "External Dev Corp"
+    group: "Contractors"
+    vlan: 30
+    enabled:  true
+    account_created: "2026-01-05"
+    account_expires: "2026-03-31"  # 3 months contract
+    failed_login_count:  0
+    lockout: false
+    notes: "Temporary contractor, expires end of Q1"
+  
+  - user_id: 21
+    username:  "contractor.tester1"
+    password: "PLACEHOLDER_CONTRACTOR_PASSWORD"
+    full_name: "External Tester 1"
+    email: "tester1@external. com"
+    company: "QA Solutions GmbH"
+    group: "Contractors"
+    vlan:  30
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "2026-02-28"  # 2 months contract
+    failed_login_count: 0
+    lockout: false
+    notes: "QA contractor for project Alpha"
+  
+  # Guests (optional - usually Guest WiFi uses PSK)
+  - user_id: 30
+    username:  "guest.visitor1"
+    password: "PLACEHOLDER_GUEST_PASSWORD"
+    full_name: "Visitor 1"
+    email:  "visitor@example.com"
+    group: "Guests"
+    vlan:  20
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "2026-01-06"  # 1 day only
+    failed_login_count:  0
+    lockout: false
+    notes: "Temporary guest account for meeting"
+  
+  # Test Users (for LAB-08)
+  - user_id: 100
+    username: "test.user1"
+    password: "PLACEHOLDER_TEST_PASSWORD"
+    full_name: "Test User 1"
+    email: "test1@lab.local"
+    group: "Employees"
+    vlan: 10
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout:  false
+    notes: "Test account for LAB-08"
+  
+  - user_id: 101
+    username: "test.user2"
+    password: "PLACEHOLDER_TEST_PASSWORD"
+    full_name: "Test User 2"
+    email: "test2@lab.local"
+    group: "Contractors"
+    vlan: 30
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout: false
+    notes:  "Test account for VLAN 30 assignment"
+  
+  - user_id: 102
+    username: "test.admin"
+    password: "PLACEHOLDER_TEST_ADMIN_PASSWORD"
+    full_name: "Test Admin"
+    email: "testadmin@lab.local"
+    group: "IT-Admins"
+    vlan: 99
+    enabled: true
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout: false
+    notes: "Test admin account for VLAN 99 assignment"
+  
+  - user_id: 103
+    username: "test.disabled"
+    password: "PLACEHOLDER_TEST_PASSWORD"
+    full_name: "Disabled Test User"
+    email: "disabled@lab.local"
+    group: "Employees"
+    vlan: 10
+    enabled: false  # Disabled for testing deny scenarios
+    account_created: "2026-01-05"
+    account_expires: "never"
+    failed_login_count: 0
+    lockout: false
+    notes: "Intentionally disabled for testing"
+
+radius_attributes:
+  # Standard RADIUS Attributes used
+  standard: 
+    - attribute_id: 1
+      name: "User-Name"
+      description: "Username for authentication"
+    - attribute_id: 2
+      name: "User-Password"
+      description: "Password (encrypted in Access-Request)"
+    - attribute_id:  4
+      name: "NAS-IP-Address"
+      description: "IP of Network Access Server (AP/Router)"
+    - attribute_id:  5
+      name: "NAS-Port"
+      description:  "Port on NAS where user connected"
+    - attribute_id:  27
+      name: "Session-Timeout"
+      description:  "Maximum session time in seconds"
+    - attribute_id: 28
+      name: "Idle-Timeout"
+      description: "Idle time before disconnect"
+    - attribute_id:  64
+      name: "Tunnel-Type"
+      description: "VLAN tunneling"
+      value: 13  # VLAN
+    - attribute_id: 65
+      name: "Tunnel-Medium-Type"
+      description:  "Medium type for tunnel"
+      value: 6  # IEEE 802
+    - attribute_id: 81
+      name: "Tunnel-Private-Group-ID"
+      description: "VLAN ID assignment"
+      example: "10"  # VLAN 10
+  
+  vendor_specific:
+    - vendor:  "DrayTek"
+      attributes:
+        - name: "DrayTek-VLAN-ID"
+          description: "Direct VLAN assignment"
+        - name: "DrayTek-Bandwidth-Limit"
+          description: "Per-user bandwidth limit"
+        - name:  "DrayTek-Filter-ID"
+          description: "Firewall filter to apply"
+
+authentication_flow:
+  steps:
+    - step: 1
+      description: "Client associates with SSID (Company-Office)"
+      protocol: "802.11"
+    - step: 2
+      description: "AP requests identity from client"
+      protocol: "EAP"
+      message: "EAP-Request Identity"
+    - step: 3
+      description: "Client responds with username"
+      protocol: "EAP"
+      message: "EAP-Response Identity (max. mustermann)"
+    - step: 4
+      description: "AP forwards to RADIUS server"
+      protocol: "RADIUS"
+      message: "Access-Request"
+      attributes:
+        - "User-Name:  max.mustermann"
+        - "NAS-IP-Address: 192.168.99.3"
+        - "NAS-Port: 1"
+    - step: 5
+      description: "RADIUS checks user in database or LDAP"
+      action: "Database lookup or LDAP bind"
+    - step: 6
+      description: "RADIUS challenges client"
+      protocol: "RADIUS"
+      message: "Access-Challenge"
+      method: "EAP-PEAP or EAP-TTLS"
+    - step: 7
+      description: "Client provides encrypted credentials"
+      protocol: "EAP"
+      encryption: "TLS tunnel"
+    - step: 8
+      description: "AP forwards to RADIUS"
+      protocol: "RADIUS"
+      message: "Access-Request (continued)"
+    - step: 9
+      description: "RADIUS validates credentials"
+      action: "Password check"
+    - step: 10
+      description: "RADIUS sends accept with VLAN"
+      protocol: "RADIUS"
+      message: "Access-Accept"
+      attributes:
+        - "Tunnel-Type: VLAN"
+        - "Tunnel-Private-Group-ID: 10"
+        - "Session-Timeout: 28800"
+    - step: 11
+      description: "AP assigns client to VLAN 10"
+      action: "VLAN tagging"
+    - step: 12
+      description: "Client requests IP via DHCP"
+      protocol:  "DHCP"
+      vlan: 10
+    - step: 13
+      description: "Client receives IP 192.168.10.x"
+      result: "Fully authenticated and connected"
+
+security_policies:
+  password_policy:
+    min_length: 12
+    complexity: 
+      - "Uppercase letters"
+      - "Lowercase letters"
+      - "Numbers"
+      - "Special characters"
+    expiration:  90  # days
+    history: 5  # Cannot reuse last 5 passwords
+    lockout_threshold: 5  # Failed attempts
+    lockout_duration: 30  # minutes
+  
+  account_policy:
+    max_idle_days: 90
+    account_expiration_warning: 14  # days before
+    contractor_accounts_expire: true
+    guest_accounts_expire:  true
+    admin_accounts_expire: false
+  
+  session_policy:
+    max_concurrent_sessions: 3
+    session_timeout_default: 28800  # 8 hours
+    idle_timeout_default: 3600  # 1 hour
+    reauthentication_interval: 86400  # 24 hours
+
+logging:
+  events_to_log:
+    - "Authentication Success"
+    - "Authentication Failure"
+    - "Account Lockout"
+    - "Account Enabled/Disabled"
+    - "Password Changed"
+    - "Session Start"
+    - "Session End"
+    - "VLAN Assignment"
+    - "Accounting Updates"
+  
+  log_destination: 
+    - "Local RADIUS log"
+    - "Syslog (192.168.99.10)"
+    - "RADIUS Accounting (if enabled)"
+  
+  retention:
+    local:  "7 days"
+    syslog: "90 days"
+    accounting: "1 year"
+
+integration: 
+  ldap_backend:
+    enabled: false  # Enable in LAB-09
+    server: "192.168.50.10"
+    port: 636  # LDAPS
+    base_dn: "OU=Users,DC=company,DC=local"
+    bind_dn: "CN=RouterService,OU=ServiceAccounts,DC=company,DC=local"
+    bind_password: "PLACEHOLDER_LDAP_BIND_PASSWORD"
+    search_filter: "(sAMAccountName=%u)"
+    group_membership_attribute: "memberOf"
+    
+  active_directory_groups:
+    - ad_group:  "CN=IT-Admins,OU=Groups,DC=company,DC=local"
+      radius_group: "IT-Admins"
+      vlan:  99
+    - ad_group: "CN=Employees,OU=Groups,DC=company,DC=local"
+      radius_group: "Employees"
+      vlan: 10
+    - ad_group:  "CN=Contractors,OU=Groups,DC=company,DC=local"
+      radius_group: "Contractors"
+      vlan: 30
+
+testing:
+  test_scenarios:
+    - test_id: "RADIUS-001"
+      description: "Valid user authentication"
+      username: "test.user1"
+      password: "PLACEHOLDER_TEST_PASSWORD"
+      expected_result: "Access-Accept, VLAN 10"
+      status: "PENDING"
+    
+    - test_id: "RADIUS-002"
+      description:  "Invalid password"
+      username: "test. user1"
+      password: "wrong_password"
+      expected_result: "Access-Reject"
+      status: "PENDING"
+    
+    - test_id: "RADIUS-003"
+      description: "Unknown user"
+      username: "unknown. user"
+      password: "any_password"
+      expected_result: "Access-Reject"
+      status: "PENDING"
+    
+    - test_id:  "RADIUS-004"
+      description: "Disabled user"
+      username: "test.disabled"
+      password: "PLACEHOLDER_TEST_PASSWORD"
+      expected_result: "Access-Reject"
+      status: "PENDING"
+    
+    - test_id: "RADIUS-005"
+      description: "VLAN assignment for admin"
+      username: "test. admin"
+      password: "PLACEHOLDER_TEST_ADMIN_PASSWORD"
+      expected_result: "Access-Accept, VLAN 99"
+      status: "PENDING"
+    
+    - test_id: "RADIUS-006"
+      description: "VLAN assignment for contractor"
+      username: "test. user2"
+      password: "PLACEHOLDER_TEST_PASSWORD"
+      expected_result: "Access-Accept, VLAN 30"
+      status: "PENDING"
+
+troubleshooting:
+  common_issues:
+    - issue: "Access-Reject for valid user"
+      possible_causes:
+        - "Password incorrect"
+        - "User disabled"
+        - "User not in RADIUS database"
+        - "LDAP backend connection failed"
+      troubleshooting_steps:
+        - "Check RADIUS log for reject reason"
+        - "Verify user exists and is enabled"
+        - "Test password with different method"
+        - "Check LDAP connectivity if backend enabled"
+    
+    - issue:  "No RADIUS response"
+      possible_causes: 
+        - "RADIUS server not reachable"
+        - "Shared secret mismatch"
+        - "Firewall blocking UDP 1812"
+        - "RADIUS service not running"
+      troubleshooting_steps:
+        - "Ping RADIUS server from AP"
+        - "Verify shared secret matches on both sides"
+        - "Check firewall rules"
+        - "Check RADIUS service status on router"
+    
+    - issue:  "Wrong VLAN assignment"
+      possible_causes:
+        - "VLAN attribute not sent by RADIUS"
+        - "AP not configured to honor VLAN attribute"
+        - "User in wrong group"
+      troubleshooting_steps: 
+        - "Check Access-Accept packet for VLAN attributes"
+        - "Verify AP supports dynamic VLAN assignment"
+        - "Verify user group membership"
+        - "Check group-to-VLAN mapping"
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial RADIUS user database created"
+      - "Defined 4 user groups"
+      - "Created 13 test/example users"
+      - "Documented authentication flow"
+    author: "Lab Admin"
+
+notes:  |
+  RADIUS User Management Notes: 
+  
+  1. Password Security:
+     - All passwords shown as PLACEHOLDER
+     - Real passwords must be strong (12+ chars)
+     - Store real passwords in password manager
+  
+  2. User Lifecycle:
+     - Regular review of user accounts (quarterly)
+     - Disable unused accounts promptly
+     - Contractor accounts auto-expire
+     - Guest accounts are short-lived
+  
+  3. VLAN Assignment:
+     - Dynamic VLAN based on group membership
+     - Simplifies network access control
+     - No need to manage per-SSID VLANs for different users
+  
+  4. LDAP Integration (LAB-09):
+     - Migrate to AD for centralized user management
+     - RADIUS becomes authentication proxy
+     - Group membership drives VLAN assignment
+  
+  5. For IHK Documentation:
+     - Document user provisioning process
+     - Explain RADIUS authentication flow with diagram
+     - Show Access-Accept packet with VLAN attributes
+     - Document testing of different user types
+  
+  6. Compliance: 
+     - Log all authentication attempts (GDPR:  legitimate interest)
+     - User data retention per policy (90 days logs)
+     - Access reviews for admin accounts (quarterly)

@@ -1,0 +1,544 @@
+# VPN Configuration Documentation
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+vpn_infrastructure:
+  router:
+    model: "DrayTek Vigor 2927ax"
+    wan_ip: "203.0.113.10"  # Example public IP (RFC 5737 documentation range)
+    vpn_capabilities:
+      - "IPSec (IKEv1/IKEv2)"
+      - "SSL VPN (Remote Access)"
+      - "PPTP (deprecated, not recommended)"
+      - "L2TP/IPSec"
+      - "Multiple concurrent tunnels"
+
+# IPSec Site-to-Site VPN Profiles
+
+ipsec_site_to_site:
+  - profile_id: 1
+    name: "HQ-to-Branch-Office"
+    description: "IPSec tunnel between headquarters and branch office"
+    enabled: true
+    
+    local_site:
+      name: "Headquarters"
+      public_ip: "203.0.113.10"
+      local_subnets:
+        - "192.168.10.0/24"  # Office VLAN
+        - "192.168.30.0/24"  # Lab VLAN
+      router:  "DrayTek Vigor 2927ax"
+    
+    remote_site:
+      name: "Branch Office"
+      public_ip: "203.0.113.20"
+      remote_subnets:
+        - "192.168.20.0/24"  # Branch office network
+      router: "DrayTek Vigor 2926"
+    
+    phase1:
+      ike_version: "IKEv2"  # Preferred, fallback to IKEv1
+      authentication:  "Pre-Shared Key"
+      psk: "PLACEHOLDER_SITE_TO_SITE_PSK_32_CHARS_MINIMUM"
+      encryption: "AES-256"
+      hash:  "SHA-256"
+      dh_group: 14  # 2048-bit
+      lifetime: 28800  # 8 hours in seconds
+      dpd_enabled: true  # Dead Peer Detection
+      dpd_interval: 30
+      dpd_retry: 3
+      nat_traversal: true  # Enable if behind NAT
+    
+    phase2:
+      encryption: "AES-256"
+      hash: "SHA-256"
+      pfs: true  # Perfect Forward Secrecy
+      pfs_group: 14
+      lifetime: 3600  # 1 hour in seconds
+      replay_protection: true
+    
+    routing: 
+      type: "Policy-Based"  # or "Route-Based"
+      local_traffic:  "192.168.10.0/24, 192.168.30.0/24"
+      remote_traffic: "192.168.20.0/24"
+      action: "Encrypt and send via tunnel"
+    
+    firewall:
+      allow_protocols: 
+        - "All"  # Or specific:  HTTP, HTTPS, SMB, RDP, SSH
+      qos_priority: "high"
+    
+    monitoring:
+      health_check:  "ICMP ping to 192.168.20.1"
+      check_interval: 60  # seconds
+      failover_action: "Alert admin, log event"
+    
+    notes: |
+      Production site-to-site tunnel. 
+      Used for file sharing, remote desktop, VoIP between sites.
+      High priority QoS ensures good performance.
+  
+  - profile_id: 2
+    name: "HQ-to-Datacenter"
+    description: "IPSec tunnel to cloud datacenter"
+    enabled: false  # Example, not configured in lab
+    
+    local_site: 
+      name: "Headquarters"
+      public_ip: "203.0.113.10"
+      local_subnets: 
+        - "192.168.10.0/24"
+    
+    remote_site:
+      name: "AWS VPC"
+      public_ip:  "198.51.100.50"
+      remote_subnets:
+        - "10.0.0.0/16"
+      router: "AWS Virtual Private Gateway"
+    
+    phase1:
+      ike_version: "IKEv2"
+      authentication: "Pre-Shared Key"
+      psk: "PLACEHOLDER_AWS_VPN_PSK"
+      encryption: "AES-256"
+      hash: "SHA-256"
+      dh_group: 14
+      lifetime:  28800
+    
+    phase2:
+      encryption: "AES-256"
+      hash: "SHA-256"
+      pfs: true
+      pfs_group: 14
+      lifetime: 3600
+    
+    notes: "Example for cloud connectivity (not implemented in lab)"
+
+# SSL VPN Remote Access Profiles
+
+ssl_vpn: 
+  general:
+    enabled: true
+    portal_url: "https://203.0.113.10:443"  # Or custom port like 8443
+    ssl_port: 443
+    protocol: "TLSv1.2"  # Minimum, TLSv1.3 preferred
+    certificate: 
+      type: "Self-Signed"  # Or "CA-Signed" for production
+      subject: "CN=vpn.company.local"
+      valid_from: "2026-01-01"
+      valid_until: "2027-01-01"
+      notes: "Self-signed OK for lab, use CA-signed for production"
+    
+    cipher_suites: 
+      - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+      - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+    
+    authentication: 
+      methods:
+        - "Local User Database"
+        - "RADIUS"
+        - "LDAP/Active Directory"
+      default_method: "RADIUS"
+      two_factor: false  # Optional:  Enable for production
+    
+    ip_pool:
+      range: "192.168.100.100 - 192.168.100.150"
+      subnet:  "192.168.100.0/24"
+      netmask: "255.255.255.0"
+      gateway: "192.168.100.1"
+      dns_servers: 
+        - "192.168.10.1"
+        - "8.8.8.8"
+      wins_server: ""  # Optional
+    
+    routing:
+      mode: "Split Tunnel"  # or "Full Tunnel"
+      split_tunnel_networks:
+        - "192.168.10.0/24"  # Office
+        - "192.168.30.0/24"  # Lab
+        - "192.168.99.0/24"  # Management (admin access only)
+      # With split tunnel, internet traffic goes direct, not via VPN
+    
+    bandwidth_limit:
+      per_user_download: "unlimited"  # or "50 Mbps"
+      per_user_upload: "unlimited"
+    
+    session_settings:
+      max_concurrent_users: 50
+      session_timeout: 28800  # 8 hours
+      idle_timeout: 3600  # 1 hour
+      keepalive_interval: 60
+  
+  user_profiles:
+    - profile_name: "Admin-VPN"
+      description: "Full access for IT administrators"
+      user_group: "IT-Admins"
+      allowed_networks:
+        - "192.168.10.0/24"
+        - "192.168.30.0/24"
+        - "192.168.99.0/24"  # Management access
+      firewall_policy: "Allow All"
+      qos_priority: "high"
+      notes:  "Admins get full network access including management VLAN"
+    
+    - profile_name: "Employee-VPN"
+      description:  "Standard access for employees"
+      user_group: "Employees"
+      allowed_networks:
+        - "192.168.10.0/24"  # Office only
+      firewall_policy: "Standard-Office"
+      qos_priority:  "medium"
+      notes: "Employees can access office resources, not management"
+    
+    - profile_name: "Contractor-VPN"
+      description: "Limited access for contractors"
+      user_group: "Contractors"
+      allowed_networks:
+        - "192.168.30.0/24"  # Lab only
+      firewall_policy:  "Contractor-Restricted"
+      qos_priority: "low"
+      bandwidth_limit: "10 Mbps"
+      notes: "Contractors limited to lab network only"
+  
+  vpn_users:
+    - username: "admin. remote"
+      password: "PLACEHOLDER_ADMIN_VPN_PASSWORD"
+      full_name: "Remote Admin"
+      profile: "Admin-VPN"
+      enabled: true
+      notes: "Admin account for remote management"
+    
+    - username: "max.mustermann"
+      password: "PLACEHOLDER_USER_VPN_PASSWORD"
+      full_name: "Max Mustermann"
+      profile: "Employee-VPN"
+      enabled:  true
+      authentication_method: "RADIUS"  # Uses RADIUS for auth
+      notes: "Regular employee remote access"
+    
+    - username: "contractor.dev1"
+      password: "PLACEHOLDER_CONTRACTOR_VPN_PASSWORD"
+      full_name: "External Developer"
+      profile: "Contractor-VPN"
+      enabled: true
+      account_expires: "2026-03-31"
+      notes: "Temporary contractor access"
+
+# L2TP/IPSec (Alternative for clients without SSL VPN support)
+
+l2tp_ipsec:
+  enabled: false  # Optional, enable if needed
+  description: "L2TP/IPSec for legacy client support"
+  
+  server:
+    ip: "203.0.113.10"
+    ipsec_psk: "PLACEHOLDER_L2TP_IPSEC_PSK"
+    l2tp_secret: "PLACEHOLDER_L2TP_SECRET"
+  
+  ip_pool:
+    range: "192.168.101.100 - 192.168.101.150"
+  
+  authentication:
+    method: "CHAP"  # or "PAP", "MS-CHAPv2"
+    user_database: "Local"
+  
+  notes: "L2TP/IPSec for compatibility with older devices"
+
+# Client Configuration Examples
+
+client_configs:
+  windows: 
+    ssl_vpn:
+      method: "DrayTek Smart VPN Client"
+      download_url: "https://www.draytek.com/support/downloads/"
+      configuration: 
+        server: "203.0.113.10"
+        port: 443
+        username: "max.mustermann"
+        password: "PLACEHOLDER_USER_VPN_PASSWORD"
+        auto_reconnect: true
+        save_password: false  # For security
+    
+    ipsec_native:
+      method: "Windows Built-in VPN"
+      configuration:
+        connection_name: "Company VPN"
+        server: "203.0.113.10"
+        vpn_type: "IKEv2"
+        authentication: "Use pre-shared key"
+        psk: "PLACEHOLDER_SITE_TO_SITE_PSK"
+  
+  macos:
+    ssl_vpn:
+      method: "Browser-based (clientless)"
+      url: "https://203.0.113.10"
+    
+    ipsec_native: 
+      method: "macOS Built-in VPN"
+      configuration: 
+        server: "203.0.113.10"
+        remote_id: "vpn.company.local"
+        authentication: "Shared Secret"
+        shared_secret: "PLACEHOLDER_SITE_TO_SITE_PSK"
+  
+  linux: 
+    ssl_vpn: 
+      method: "OpenConnect (if compatible)"
+      command: |
+        sudo openconnect --protocol=anyconnect https://203.0.113.10
+    
+    ipsec_native: 
+      method: "StrongSwan"
+      configuration_file: "/etc/ipsec.conf"
+      example_config: |
+        conn company-vpn
+          keyexchange=ikev2
+          left=%defaultroute
+          leftauth=psk
+          right=203.0.113.10
+          rightauth=psk
+          rightsubnet=192.168.10.0/24
+          auto=start
+  
+  ios_android:
+    ssl_vpn: 
+      method: "Mobile browser"
+      url: "https://203.0.113.10"
+    
+    ipsec_native:
+      method: "Built-in VPN settings"
+      type: "IKEv2"
+      server: "203.0.113.10"
+      remote_id: "vpn.company.local"
+      authentication: "Shared Secret"
+
+# Security & Best Practices
+
+security: 
+  encryption_standards:
+    minimum: 
+      ike:  "AES-128, SHA-256, DH Group 14"
+      ipsec: "AES-128, SHA-256, PFS Group 14"
+    recommended:
+      ike: "AES-256, SHA-256, DH Group 19 or 20"
+      ipsec: "AES-256, SHA-256, PFS Group 19 or 20"
+    avoid:
+      - "DES / 3DES (weak encryption)"
+      - "MD5 (weak hash)"
+      - "DH Group 1 or 2 (weak DH)"
+      - "No PFS (compromises forward secrecy)"
+  
+  psk_requirements:
+    min_length: 32
+    complexity: "High (random, not dictionary word)"
+    rotation: "Every 180 days"
+    storage: "Password manager, encrypted"
+  
+  certificate_requirements:
+    ssl_vpn: 
+      type: "CA-signed for production"
+      key_size: "2048-bit minimum, 4096-bit recommended"
+      validity: "1 year (rotate annually)"
+      san: "Include all public DNS names"
+  
+  logging:
+    events_to_log: 
+      - "VPN connection attempts (success/failure)"
+      - "User authentication (success/failure)"
+      - "Tunnel establishment/teardown"
+      - "Traffic volume per user"
+      - "Disconnection reason"
+    retention: "90 days active, 1 year archive"
+  
+  monitoring: 
+    health_checks:
+      - "Tunnel status (up/down)"
+      - "Bandwidth utilization"
+      - "Latency through tunnel"
+      - "Packet loss"
+    alerts: 
+      - "Tunnel down for >5 minutes"
+      - "Authentication failures >10 in 10 minutes"
+      - "Bandwidth >80% utilization"
+
+# Testing & Validation
+
+testing:
+  site_to_site_tests: 
+    - test_id: "VPN-S2S-001"
+      description: "Tunnel establishment"
+      procedure: "Initiate tunnel from HQ router"
+      expected:  "Phase 1 and Phase 2 successful, tunnel UP"
+      validation: "Check VPN status page, logs show 'tunnel established'"
+    
+    - test_id: "VPN-S2S-002"
+      description:  "Traffic through tunnel"
+      procedure: "Ping from 192.168.10.100 to 192.168.20.100"
+      expected: "Ping successful, RTT <50ms"
+      validation: "Successful ping replies"
+    
+    - test_id: "VPN-S2S-003"
+      description: "Failover on tunnel down"
+      procedure: "Disconnect WAN cable at branch"
+      expected: "Tunnel goes down, alert generated, traffic fails"
+      validation: "Log shows tunnel down event"
+  
+  ssl_vpn_tests:
+    - test_id: "VPN-SSL-001"
+      description: "User authentication"
+      username: "max.mustermann"
+      password: "PLACEHOLDER_USER_VPN_PASSWORD"
+      expected: "Login successful, VPN IP assigned"
+      validation: "Client shows connected, receives IP 192.168.100.x"
+    
+    - test_id: "VPN-SSL-002"
+      description: "Access to office network"
+      procedure: "From VPN client, ping 192.168.10.1"
+      expected: "Ping successful"
+      validation: "Gateway reachable from VPN"
+    
+    - test_id: "VPN-SSL-003"
+      description: "Split tunnel validation"
+      procedure: "Check routing table on VPN client"
+      expected: "Only 192.168.x.0/24 routes via VPN, default route via local"
+      validation: "Route table shows split tunnel"
+    
+    - test_id: "VPN-SSL-004"
+      description: "Contractor limited access"
+      username: "contractor.dev1"
+      procedure: "Try to access 192.168.10.10 (office file server)"
+      expected: "Access denied (not in allowed networks)"
+      validation: "Connection timeout or firewall block"
+
+troubleshooting:
+  common_issues:
+    - issue: "IPSec tunnel won't establish"
+      symptoms: "Phase 1 fails"
+      possible_causes: 
+        - "PSK mismatch"
+        - "Encryption/hash/DH mismatch"
+        - "Firewall blocking UDP 500/4500"
+        - "NAT traversal issue"
+      troubleshooting: 
+        - "Check PSK on both sides"
+        - "Verify Phase 1 settings match exactly"
+        - "Check firewall allows UDP 500, 4500"
+        - "Enable NAT-T if behind NAT"
+    
+    - issue: "Phase 1 succeeds, Phase 2 fails"
+      symptoms: "IKE established, but no traffic"
+      possible_causes: 
+        - "Phase 2 encryption/hash mismatch"
+        - "Proxy ID mismatch (traffic selectors)"
+        - "PFS mismatch"
+      troubleshooting:
+        - "Check Phase 2 settings match"
+        - "Verify local/remote subnets configured correctly"
+        - "Check PFS settings"
+    
+    - issue: "SSL VPN portal not reachable"
+      symptoms: "Browser shows connection refused"
+      possible_causes: 
+        - "SSL VPN service not enabled"
+        - "Firewall blocking port 443 from WAN"
+        - "Certificate issue"
+      troubleshooting: 
+        - "Verify SSL VPN enabled in router"
+        - "Check firewall rule allows WAN→Router: 443"
+        - "Test from external network (not LAN)"
+    
+    - issue: "VPN connects but can't access internal network"
+      symptoms: "VPN established, but ping fails"
+      possible_causes: 
+        - "Routes not pushed to client"
+        - "Firewall blocks VPN→LAN"
+        - "Split tunnel misconfigured"
+      troubleshooting:
+        - "Check client routing table"
+        - "Verify firewall allows VPN pool→LAN"
+        - "Check SSL VPN profile network settings"
+
+performance: 
+  throughput: 
+    ipsec: 
+      aes_128:  "~800 Mbps (2927ax hardware limit)"
+      aes_256: "~600 Mbps"
+      notes: "Actual throughput depends on CPU, WAN speed"
+    
+    ssl_vpn:
+      typical: "50-100 Mbps per client"
+      max_aggregate: "500 Mbps"
+    
+  latency:
+    ipsec_overhead: "+2-5 ms"
+    ssl_vpn_overhead: "+5-10 ms"
+    notes: "Latency mainly depends on internet connection quality"
+  
+  optimization:
+    - "Use IKEv2 (faster than IKEv1)"
+    - "Enable compression if bandwidth limited"
+    - "QoS prioritize VPN traffic"
+    - "Use hardware-accelerated encryption (on supported routers)"
+
+compliance:
+  standards:
+    - "RFC 7296: IKEv2"
+    - "RFC 4301: IPSec Architecture"
+    - "RFC 5246: TLS 1.2"
+    - "RFC 8446: TLS 1.3"
+  
+  certifications:
+    - "Common Criteria EAL4+ (for some DrayTek models)"
+    - "FIPS 140-2 (encryption modules)"
+  
+  gdpr:
+    personal_data: "VPN logs contain usernames, source IPs"
+    retention: "90 days (necessary for security)"
+    access_control: "Logs accessible only to admins"
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial VPN configuration documented"
+      - "Defined IPSec site-to-site profile"
+      - "Configured SSL VPN for remote access"
+      - "Created user profiles and access policies"
+    author: "Lab Admin"
+
+notes: |
+  VPN Configuration Notes:
+  
+  1. Security Priority:
+     - Always use strong encryption (AES-256)
+     - PSKs must be long and random (32+ chars)
+     - Consider certificate-based auth for site-to-site
+     - Enable 2FA for SSL VPN in production
+  
+  2. Site-to-Site vs Remote Access:
+     - Site-to-Site: IPSec, always-on, for networks
+     - Remote Access: SSL VPN, on-demand, for users
+  
+  3. Split vs Full Tunnel:
+     - Split:  Better performance, less bandwidth
+     - Full: Better security (all traffic inspected)
+     - Choose based on security policy
+  
+  4. For IHK Documentation:
+     - Document VPN topology with diagram
+     - Explain encryption/authentication choices
+     - Show client configuration steps
+     - Include test results (connectivity, throughput)
+  
+  5. Maintenance: 
+     - PSK rotation every 6 months
+     - Certificate renewal before expiry
+     - Regular review of VPN user accounts
+     - Monitor bandwidth usage
+  
+  6. Production Considerations:
+     - Use CA-signed certificates (not self-signed)
+     - Implement 2FA for critical access
+     - Set up redundant VPN concentrators
+     - Document disaster recovery for VPN failure

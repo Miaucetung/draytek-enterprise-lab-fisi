@@ -1,0 +1,611 @@
+# Syslog Configuration Documentation
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+syslog_infrastructure:
+  purpose: "Centralized logging for security, troubleshooting, and compliance"
+  benefits: 
+    - "Persistent logs (survive router reboots)"
+    - "Centralized log analysis across devices"
+    - "Long-term retention for compliance"
+    - "Advanced search and filtering"
+    - "Correlation of events across systems"
+
+# Syslog Server Configuration
+
+syslog_servers:
+  - server_id: 1
+    hostname: "syslog-server"
+    ip: "192.168.99.10"
+    os: "Ubuntu 22.04 LTS"
+    software: "syslog-ng"
+    port: 514
+    protocol: "UDP"  # Standard, or TCP for reliability
+    tls_enabled: false  # Enable for encrypted syslog
+    
+    storage:
+      location: "/var/log/draytek/"
+      retention_active: "90 days"
+      retention_archive: "1 year"
+      rotation_policy: "daily"
+      compression: "gzip (after 7 days)"
+      disk_space_allocated: "50 GB"
+    
+    performance:
+      max_messages_per_second: 1000
+      buffer_size: 10000
+      disk_write_buffer: "1 MB"
+    
+    access:
+      allowed_sources: 
+        - "192.168.99.1"  # DrayTek Router
+        - "192.168.99.2"  # Managed Switch
+        - "192.168.99.3"  # Access Point 1
+        - "192.168.99.4"  # Access Point 2
+      firewall_rule: "Allow UDP 514 from VLAN 99"
+    
+    notes: "Primary syslog server for all network devices"
+  
+  - server_id:  2
+    hostname: "syslog-backup"
+    ip: "192.168.99.15"
+    os: "Ubuntu 22.04 LTS"
+    software: "rsyslog"
+    port: 514
+    protocol: "UDP"
+    enabled: false  # Backup server (optional)
+    notes: "Backup syslog server for redundancy (optional setup)"
+
+# DrayTek Router Syslog Configuration
+
+router_syslog_config:
+  device:  "DrayTek Vigor 2927ax"
+  ip: "192.168.99.1"
+  
+  general_settings:
+    enable_syslog: true
+    syslog_server_primary: "192.168.99.10"
+    syslog_server_secondary: ""  # Optional backup
+    syslog_port: 514
+    protocol: "UDP"
+    facility: "local7"  # Syslog facility code
+    
+  log_levels:
+    system: "Information"
+    administrator: "Information"
+    vpn: "Information"
+    firewall: "Information"  # or "Warning" to reduce noise
+    dhcp: "Warning"  # Info generates too much traffic
+    wan: "Information"
+    wireless: "Information"
+    radius: "Information"
+    debug: "Disabled"  # Only enable for troubleshooting
+  
+  categories_enabled:
+    - name: "System"
+      enabled: true
+      level: "Information"
+      description: "System events (boot, config changes, errors)"
+    
+    - name: "Administrator"
+      enabled: true
+      level: "Information"
+      description: "Admin logins, logouts, config changes"
+    
+    - name: "VPN"
+      enabled: true
+      level: "Information"
+      description: "VPN tunnel status, user connections"
+    
+    - name:  "Firewall"
+      enabled: true
+      level: "Information"
+      description: "Firewall blocks, rule matches"
+    
+    - name:  "DHCP"
+      enabled: true
+      level: "Warning"
+      description: "DHCP lease assignments (Warning to reduce volume)"
+    
+    - name: "WAN"
+      enabled:  true
+      level: "Information"
+      description: "WAN status changes, IP changes"
+    
+    - name:  "Wireless"
+      enabled:  true
+      level: "Information"
+      description: "WLAN client associations, disconnections"
+    
+    - name: "RADIUS"
+      enabled: true
+      level: "Information"
+      description: "RADIUS authentication attempts"
+    
+    - name:  "NAT"
+      enabled: false
+      level: "Disabled"
+      description: "NAT translations (too verbose)"
+    
+    - name: "Routing"
+      enabled: false
+      level: "Disabled"
+      description: "Routing table changes"
+    
+    - name: "Debug"
+      enabled: false
+      level: "Disabled"
+      description: "Debug-level logs (only for troubleshooting)"
+
+# Syslog Message Format
+
+message_format:
+  rfc:  "RFC 5424"  # Modern syslog format
+  example:  "<134>1 2026-01-05T14:30:00. 123Z 192.168.99.1 DrayTek - FIREWALL - [meta] Connection blocked from 192.168.20.100 to 192.168.10.10"
+  
+  components:
+    priority: "<134>"  # Calculated:  Facility * 8 + Severity
+    version: "1"
+    timestamp:  "2026-01-05T14:30:00.123Z"  # ISO 8601
+    hostname: "192.168.99.1"
+    app_name: "DrayTek"
+    proc_id: "-"
+    msg_id: "FIREWALL"
+    structured_data: "[meta]"
+    message:  "Connection blocked from 192.168.20.100 to 192.168.10.10"
+  
+  priority_calculation:
+    facility_local7: 23
+    severity_info: 6
+    priority:  190  # (23 * 8) + 6 = 190
+
+# Syslog Facilities
+
+facilities:
+  - code: 0
+    name: "kern"
+    description: "Kernel messages"
+  - code: 16
+    name: "local0"
+    description: "Local use 0"
+  - code: 17
+    name: "local1"
+    description: "Local use 1"
+  - code:  18
+    name: "local2"
+    description: "Local use 2"
+  - code: 23
+    name: "local7"
+    description: "Local use 7 (DrayTek default)"
+
+# Syslog Severity Levels
+
+severity_levels:
+  - code: 0
+    name: "Emergency"
+    description: "System is unusable"
+    example: "Complete system failure"
+  - code: 1
+    name: "Alert"
+    description: "Action must be taken immediately"
+    example: "Database corruption detected"
+  - code: 2
+    name: "Critical"
+    description: "Critical conditions"
+    example: "Hardware failure imminent"
+  - code: 3
+    name: "Error"
+    description: "Error conditions"
+    example: "Configuration error, service failed"
+  - code: 4
+    name: "Warning"
+    description: "Warning conditions"
+    example: "Disk space low, high CPU usage"
+  - code: 5
+    name: "Notice"
+    description: "Normal but significant condition"
+    example: "Service started, configuration reloaded"
+  - code:  6
+    name: "Information"
+    description: "Informational messages"
+    example: "User logged in, file accessed"
+  - code: 7
+    name: "Debug"
+    description: "Debug-level messages"
+    example: "Variable values, function calls"
+
+# Event Types to Log
+
+event_types:
+  security:
+    - event:  "Admin login success"
+      severity: "Information"
+      facility: "local7"
+      retention: "1 year"
+      importance: "HIGH"
+    
+    - event: "Admin login failure"
+      severity: "Warning"
+      facility: "local7"
+      retention: "1 year"
+      importance: "CRITICAL"
+    
+    - event:  "Firewall block"
+      severity: "Information"
+      facility: "local7"
+      retention: "90 days"
+      importance: "MEDIUM"
+      notes: "Can generate high volume"
+    
+    - event: "VPN connection attempt"
+      severity: "Information"
+      facility: "local7"
+      retention: "90 days"
+      importance: "HIGH"
+    
+    - event: "RADIUS authentication failure"
+      severity: "Warning"
+      facility: "local7"
+      retention: "1 year"
+      importance: "HIGH"
+    
+    - event:  "Configuration change"
+      severity: "Notice"
+      facility: "local7"
+      retention: "1 year"
+      importance: "CRITICAL"
+  
+  operational:
+    - event: "System reboot"
+      severity: "Notice"
+      facility: "local7"
+      retention: "1 year"
+      importance: "HIGH"
+    
+    - event:  "WAN status change"
+      severity: "Warning"
+      facility: "local7"
+      retention: "1 year"
+      importance: "HIGH"
+    
+    - event:  "DHCP lease assigned"
+      severity: "Information"
+      facility: "local7"
+      retention: "30 days"
+      importance: "LOW"
+      notes: "High volume, consider Warning level"
+    
+    - event:  "Firmware upgraded"
+      severity: "Notice"
+      facility: "local7"
+      retention: "1 year"
+      importance: "HIGH"
+    
+    - event:  "DoS attack detected"
+      severity:  "Alert"
+      facility: "local7"
+      retention: "1 year"
+      importance: "CRITICAL"
+
+# Log Analysis & Monitoring
+
+analysis:
+  tools:
+    - name: "grep/awk (CLI)"
+      description: "Command-line log analysis"
+      use_case: "Quick searches, troubleshooting"
+      example: "grep 'RADIUS.*reject' /var/log/draytek/*. log"
+    
+    - name: "ELK Stack (Elasticsearch, Logstash, Kibana)"
+      description: "Advanced log aggregation and visualization"
+      use_case: "Enterprise-scale, dashboards, alerts"
+      setup_complexity: "High"
+    
+    - name: "Graylog"
+      description: "Open-source log management"
+      use_case: "Medium-scale, good balance"
+      setup_complexity: "Medium"
+    
+    - name:  "Splunk"
+      description: "Commercial SIEM platform"
+      use_case: "Enterprise, advanced analytics"
+      setup_complexity:  "Medium"
+      cost: "Paid"
+  
+  common_queries:
+    - query: "Failed admin logins"
+      command: "grep 'admin.*failed' /var/log/draytek/*.log"
+      purpose: "Detect brute force attempts"
+    
+    - query: "Firewall blocks from specific IP"
+      command: "grep 'BLOCK.*192.168.20.100' /var/log/draytek/*. log"
+      purpose: "Investigate blocked traffic"
+    
+    - query: "VPN disconnections"
+      command: "grep 'VPN.*disconnect' /var/log/draytek/*.log"
+      purpose: "Troubleshoot VPN stability"
+    
+    - query:  "Top 10 blocked destination IPs"
+      command: "grep 'BLOCK' draytek. log | grep -oP 'DST=\\K[0-9.]+' | sort | uniq -c | sort -nr | head -10"
+      purpose: "Identify attack targets"
+    
+    - query: "Events in last hour"
+      command: "grep '$(date -d '1 hour ago' '+%Y-%m-%d %H')' /var/log/draytek/*.log"
+      purpose: "Recent activity review"
+
+# Alerting Rules
+
+alerting:
+  rules: 
+    - rule_id: 1
+      name: "Multiple failed admin logins"
+      condition: ">5 failed logins in 10 minutes"
+      severity: "CRITICAL"
+      action: 
+        - "Send email to admin@company.local"
+        - "Send SMS to on-call admin"
+      query: "grep 'admin.*failed' | count in 10min window"
+      notes: "Possible brute force attack"
+    
+    - rule_id: 2
+      name:  "WAN connection down"
+      condition: "WAN status changed to DOWN"
+      severity: "HIGH"
+      action:
+        - "Send email to admin@company.local"
+        - "Create incident ticket"
+      query: "grep 'WAN.*down'"
+      notes: "Immediate attention required"
+    
+    - rule_id: 3
+      name: "High firewall block rate"
+      condition: ">1000 blocks in 5 minutes"
+      severity: "MEDIUM"
+      action:
+        - "Send email to admin@company. local"
+      query: "grep 'BLOCK' | count in 5min window"
+      notes: "Possible DoS attack or misconfiguration"
+    
+    - rule_id: 4
+      name: "Configuration change"
+      condition: "Any configuration change"
+      severity: "MEDIUM"
+      action:
+        - "Send email to admin@company. local"
+        - "Log to audit trail"
+      query: "grep 'config.*change'"
+      notes: "Track all config modifications"
+    
+    - rule_id: 5
+      name:  "VPN tunnel down"
+      condition: "Site-to-site VPN tunnel DOWN for >5 minutes"
+      severity:  "HIGH"
+      action:
+        - "Send email to admin@company. local"
+        - "Attempt automatic reconnect"
+      query: "grep 'VPN.*tunnel.*down'"
+      notes: "Business impact if site connectivity lost"
+
+# Log Retention & Archival
+
+retention: 
+  active_logs:
+    location: "/var/log/draytek/"
+    retention:  "90 days"
+    format: "Plain text"
+    rotation:  "Daily"
+    max_file_size: "100 MB"
+    naming: "YYYY-MM-DD-draytek.log"
+  
+  archived_logs:
+    location: "/archive/logs/draytek/"
+    retention:  "1 year"
+    format: "gzip compressed"
+    archival_trigger: "After 90 days"
+    naming: "YYYY-MM-draytek.log.gz"
+  
+  compliance_logs:
+    description: "Security-critical logs for compliance"
+    events:
+      - "Admin access"
+      - "Configuration changes"
+      - "Authentication failures"
+      - "VPN access"
+    retention: "2 years"
+    location: "/compliance/logs/"
+    encryption: "AES-256"
+    access_control: "Admin-only, logged"
+  
+  deletion_policy:
+    automatic: true
+    after:  "2 years"
+    secure_deletion: true
+    documentation: "Deletion logged and auditable"
+
+# Log Parsing Examples
+
+parsing_examples:
+  firewall_block:
+    raw_message: "Jan 05 14:30:00 192.168.99.1 DrayTek:  FIREWALL BLOCK:  SRC=192.168.20.100 DST=192.168.10.10 PROTO=TCP SPT=51234 DPT=445"
+    parsed: 
+      timestamp: "2026-01-05 14:30:00"
+      source_ip: "192.168.99.1"
+      device: "DrayTek"
+      event_type: "FIREWALL BLOCK"
+      source_client: "192.168.20.100"
+      destination:  "192.168.10.10"
+      protocol: "TCP"
+      source_port: 51234
+      destination_port:  445
+      interpretation: "Guest device (VLAN 20) tried to access Office file server (SMB port 445) - correctly blocked"
+  
+  admin_login:
+    raw_message: "Jan 05 14:25:00 192.168.99.1 DrayTek: ADMIN:  User 'admin' logged in from 192.168.99.20"
+    parsed:
+      timestamp: "2026-01-05 14:25:00"
+      source_ip: "192.168.99.1"
+      device: "DrayTek"
+      event_type: "ADMIN"
+      action: "logged in"
+      username: "admin"
+      source:  "192.168.99.20"
+      interpretation: "Admin logged in from management VLAN (expected)"
+  
+  radius_reject:
+    raw_message: "Jan 05 14:28:00 192.168.99.1 DrayTek: RADIUS: Access-Reject for user 'test. user' from NAS 192.168.99.3 (incorrect password)"
+    parsed:
+      timestamp: "2026-01-05 14:28:00"
+      source_ip: "192.168.99.1"
+      device: "DrayTek"
+      event_type: "RADIUS"
+      result: "Access-Reject"
+      username: "test.user"
+      nas_ip: "192.168.99.3"
+      reason: "incorrect password"
+      interpretation: "Failed WLAN login attempt - possible brute force or user forgot password"
+
+# Performance Tuning
+
+performance:
+  rate_limiting:
+    enabled: true
+    max_messages_per_second: 100
+    action_on_limit: "Drop excess, log warning"
+    notes: "Prevents log flooding from overwhelming syslog server"
+  
+  buffering:
+    router_local_buffer:  "200 entries"
+    network_buffer: "Router queues up to 100 messages if syslog server unreachable"
+    syslog_server_buffer: "10000 messages in memory before disk write"
+  
+  optimization:
+    - "Use UDP for standard logging (performance)"
+    - "Use TCP for critical logs (reliability)"
+    - "Filter verbose categories (e.g., DHCP to Warning level)"
+    - "Rotate logs daily to prevent huge files"
+    - "Compress old logs to save disk space"
+    - "Index logs for faster searching (with ELK/Graylog)"
+
+# Security Considerations
+
+security:
+  log_integrity: 
+    - "Logs stored on separate server (not on router)"
+    - "Syslog server hardened (minimal services)"
+    - "Read-only access for non-admin users"
+    - "Checksums for archived logs (detect tampering)"
+  
+  log_encryption:
+    in_transit: 
+      method: "TLS"
+      port: 6514
+      certificate: "CA-signed or self-signed"
+      notes: "Use for sensitive environments"
+    at_rest:
+      method: "Filesystem encryption (LUKS)"
+      key_management: "Secure key storage"
+      notes: "Encrypt archived logs on disk"
+  
+  access_control:
+    syslog_server_access: 
+      - "SSH key-based authentication only"
+      - "Firewall allows only VLAN 99 sources"
+      - "Sudo for privileged operations"
+      - "Fail2ban to prevent brute force"
+    
+    log_file_access:
+      owner: "root"
+      group:  "adm"
+      permissions: "0640"
+      notes: "Only root and adm group can read logs"
+  
+  gdpr_compliance:
+    personal_data:
+      - "IP addresses"
+      - "Usernames"
+      - "MAC addresses"
+    legal_basis: "Legitimate interest (security, troubleshooting)"
+    retention_justification: "Security incident investigation, compliance"
+    deletion:  "Automatic after retention period"
+    access_requests: "Process in place for subject access requests"
+
+# Troubleshooting
+
+troubleshooting:
+  - issue: "No logs arriving at syslog server"
+    checks:
+      - "Is syslog enabled on router?"
+      - "Is syslog server IP correct?"
+      - "Firewall allows UDP 514 from router to server?"
+      - "Syslog service running on server?"
+    commands:
+      - "systemctl status syslog-ng  # On server"
+      - "tail -f /var/log/syslog  # See if any logs arriving"
+      - "tcpdump -i eth0 port 514  # Capture syslog traffic"
+  
+  - issue:  "Logs too verbose"
+    solution: 
+      - "Change DHCP from Info to Warning"
+      - "Disable NAT logging"
+      - "Set Firewall to Warning (logs only blocks)"
+      - "Adjust rate limiting"
+  
+  - issue: "Syslog server disk full"
+    solution:
+      - "Implement log rotation (logrotate)"
+      - "Compress old logs (gzip)"
+      - "Archive to external storage"
+      - "Increase retention deletion frequency"
+  
+  - issue:  "Can't find specific event in logs"
+    solution:
+      - "Use grep with regex:  grep -E 'pattern' logfile"
+      - "Check log level (event might not be logged)"
+      - "Check timestamp (timezone issues? )"
+      - "Use log analysis tool (ELK, Graylog)"
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial syslog configuration documented"
+      - "Defined log retention policies"
+      - "Created alerting rules"
+      - "Documented log parsing examples"
+    author: "Lab Admin"
+
+notes:  |
+  Syslog Configuration Notes:
+  
+  1. Centralized Logging is Essential:
+     - Router logs are limited and lost on reboot
+     - Centralized logs survive hardware failures
+     - Enable correlation across multiple devices
+  
+  2. Balance Volume vs.  Detail:
+     - Too much logging:  Performance impact, disk space
+     - Too little:  Miss critical events
+     - Start with Info level, adjust based on volume
+  
+  3. Security Events are Priority:
+     - Always log:  Admin access, config changes, auth failures
+     - Longer retention for security logs (1-2 years)
+     - Alert on suspicious patterns
+  
+  4. For IHK Documentation:
+     - Document logging strategy and justification
+     - Show example log analysis (find security event)
+     - Demonstrate alerting (simulate failed logins)
+     - Explain retention policy (GDPR compliance)
+  
+  5. Maintenance: 
+     - Monitor syslog server disk space
+     - Review and tune log levels quarterly
+     - Test alerting rules regularly
+     - Audit log access (who looked at logs when)
+  
+  6. Advanced: 
+     - Consider SIEM for correlation and advanced analytics
+     - Implement log forwarding to cloud (backup)
+     - Use machine learning for anomaly detection

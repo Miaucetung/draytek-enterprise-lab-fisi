@@ -1,0 +1,621 @@
+# Quality of Service (QoS) Configuration
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+qos_strategy:
+  purpose: "Prioritize critical traffic and ensure fair bandwidth allocation"
+  goals:
+    - "VoIP calls with low latency and no packet loss"
+    - "Business applications get priority over bulk downloads"
+    - "Guest traffic limited to prevent bandwidth hogging"
+    - "Fair sharing among users within each priority class"
+  
+  approach:  "Class-Based Queueing with Traffic Shaping"
+  model:  "Differentiated Services (DiffServ)"
+
+# WAN Interface Bandwidth
+
+wan_bandwidth:
+  wan1:
+    download: 100  # Mbps
+    upload: 20     # Mbps
+    notes: "Typical fiber connection, upload is bottleneck"
+  
+  wan2:
+    download: 50   # Mbps (backup/failover)
+    upload: 10     # Mbps
+    enabled: false
+    notes: "Backup WAN, lower bandwidth"
+  
+  bottleneck:  "Upload (20 Mbps)"
+  qos_applies_to: "Upload direction (most critical)"
+
+# QoS Classes
+
+qos_classes:
+  - class_id: 1
+    name: "Critical"
+    priority: "Highest"
+    bandwidth_guarantee: "30%"  # 6 Mbps of 20 Mbps upload
+    bandwidth_max: "50%"  # Can burst to 10 Mbps if available
+    queue_type: "Priority Queue (strict priority)"
+    applications: 
+      - "VoIP (SIP, RTP)"
+      - "Video conferencing (Zoom, Teams, Webex)"
+      - "Interactive SSH/RDP"
+    dscp_marking: "EF (46) for VoIP, AF41 (34) for video"
+    notes:  "Time-sensitive traffic, must have low latency"
+  
+  - class_id: 2
+    name: "High"
+    priority: "High"
+    bandwidth_guarantee: "40%"  # 8 Mbps
+    bandwidth_max: "70%"
+    queue_type: "Weighted Fair Queueing"
+    applications:
+      - "Business applications (CRM, ERP)"
+      - "Email (SMTP, IMAP)"
+      - "Database queries"
+      - "DNS"
+      - "LDAP/Active Directory"
+    dscp_marking: "AF21 (18)"
+    notes: "Important business traffic"
+  
+  - class_id: 3
+    name: "Medium"
+    priority: "Medium"
+    bandwidth_guarantee: "20%"  # 4 Mbps
+    bandwidth_max:  "80%"
+    queue_type:  "Weighted Fair Queueing"
+    applications:
+      - "Web browsing (HTTP/HTTPS)"
+      - "General office traffic"
+      - "Cloud storage (Dropbox, OneDrive)"
+    dscp_marking: "AF11 (10) or Default (0)"
+    notes: "Standard user traffic"
+  
+  - class_id: 4
+    name: "Low"
+    priority:  "Low"
+    bandwidth_guarantee: "5%"  # 1 Mbps
+    bandwidth_max: "100%"
+    queue_type: "Weighted Fair Queueing"
+    applications:
+      - "File downloads (FTP, BitTorrent)"
+      - "Software updates"
+      - "Backup traffic"
+      - "YouTube, Netflix (personal use)"
+    dscp_marking: "AF11 (10) or CS1 (8)"
+    notes: "Bulk data, low priority"
+  
+  - class_id: 5
+    name: "Guest"
+    priority: "Lowest"
+    bandwidth_guarantee: "5%"  # 1 Mbps
+    bandwidth_max:  "20%"  # Limited to 4 Mbps total
+    queue_type: "Rate-Limited Queue"
+    applications: 
+      - "All guest traffic (VLAN 20)"
+    dscp_marking: "CS1 (8)"
+    per_client_limit: 
+      download: "10 Mbps"
+      upload: "5 Mbps"
+    notes: "Guest network traffic, heavily restricted"
+
+# Traffic Classification
+
+traffic_classification:
+  methods:
+    - method: "Layer 3/4 (IP, Port)"
+      description: "Match by protocol and port number"
+      example: "TCP port 5060-5061 = VoIP"
+      accuracy: "Medium"
+    
+    - method:  "DSCP marking"
+      description: "Match by DSCP field in IP header"
+      example: "DSCP EF (46) = VoIP"
+      accuracy: "High (if clients mark correctly)"
+    
+    - method: "Application Layer (DPI)"
+      description: "Deep Packet Inspection to identify application"
+      example: "Detect Zoom traffic by packet patterns"
+      accuracy: "Very High"
+      performance_impact: "High (CPU intensive)"
+    
+    - method:  "Source/Destination"
+      description: "Match by IP address or subnet"
+      example: "VLAN 20 (192.168.20.0/24) = Guest class"
+      accuracy: "Medium"
+  
+  rules:
+    - rule_id: 1
+      name: "VoIP-Traffic"
+      match: 
+        protocol: "UDP"
+        destination_ports: [5060, 5061, 5004]  # SIP, RTP
+      or_match:
+        dscp:  [46]  # EF
+      action: "Classify as Critical"
+      priority: 1
+    
+    - rule_id: 2
+      name: "Video-Conferencing"
+      match:
+        application: ["Zoom", "Microsoft Teams", "Webex", "Google Meet"]
+      or_match:
+        dscp:  [34]  # AF41
+      action:  "Classify as Critical"
+      priority: 2
+      notes: "Requires DPI or application signatures"
+    
+    - rule_id: 3
+      name:  "Interactive-Traffic"
+      match:
+        protocol: "TCP"
+        destination_ports: [22, 3389, 5900]  # SSH, RDP, VNC
+      action: "Classify as High"
+      priority: 3
+    
+    - rule_id: 4
+      name: "Email"
+      match:
+        protocol:  "TCP"
+        destination_ports: [25, 587, 993, 995]  # SMTP, IMAP, POP3
+      action: "Classify as High"
+      priority: 4
+    
+    - rule_id:  5
+      name: "DNS"
+      match:
+        protocol: "UDP"
+        destination_port: 53
+      action: "Classify as High"
+      priority: 5
+      notes: "DNS is critical for all applications"
+    
+    - rule_id: 6
+      name:  "Web-Browsing"
+      match:
+        protocol: "TCP"
+        destination_ports: [80, 443]
+      action:  "Classify as Medium"
+      priority: 6
+      notes: "Default classification for HTTP/HTTPS"
+    
+    - rule_id: 7
+      name: "File-Downloads"
+      match:
+        protocol:  "TCP"
+        destination_ports: [20, 21]  # FTP
+      or_match:
+        application: ["BitTorrent", "eMule"]
+      action: "Classify as Low"
+      priority: 7
+    
+    - rule_id: 8
+      name: "Guest-Traffic"
+      match: 
+        source_subnet: "192.168.20.0/24"
+      action: "Classify as Guest"
+      priority: 8
+      notes: "All VLAN 20 traffic to lowest class"
+    
+    - rule_id: 9
+      name:  "Default"
+      match:  "all"
+      action: "Classify as Medium"
+      priority: 999
+      notes: "Catch-all for unmatched traffic"
+
+# Queue Management
+
+queue_management:
+  algorithm: "Hierarchical Token Bucket (HTB)"
+  
+  queues:
+    - queue_name: "Critical-Queue"
+      class:  "Critical"
+      scheduling: "Priority (strict)"
+      bandwidth_min: "6 Mbps"
+      bandwidth_max: "10 Mbps"
+      burst:  "512 KB"
+      buffer_size: "64 packets"
+      drop_policy: "Tail Drop"
+      notes: "Strict priority ensures VoIP always sent first"
+    
+    - queue_name: "High-Queue"
+      class: "High"
+      scheduling: "WFQ (weight 40)"
+      bandwidth_min: "8 Mbps"
+      bandwidth_max: "14 Mbps"
+      burst: "256 KB"
+      buffer_size: "128 packets"
+      drop_policy: "WRED (Weighted Random Early Detection)"
+      notes: "Fair sharing among high-priority flows"
+    
+    - queue_name: "Medium-Queue"
+      class: "Medium"
+      scheduling: "WFQ (weight 20)"
+      bandwidth_min: "4 Mbps"
+      bandwidth_max: "16 Mbps"
+      burst: "128 KB"
+      buffer_size: "256 packets"
+      drop_policy: "WRED"
+    
+    - queue_name: "Low-Queue"
+      class:  "Low"
+      scheduling: "WFQ (weight 5)"
+      bandwidth_min: "1 Mbps"
+      bandwidth_max: "20 Mbps"
+      burst: "64 KB"
+      buffer_size: "512 packets"
+      drop_policy: "Tail Drop"
+      notes: "Gets leftover bandwidth"
+    
+    - queue_name: "Guest-Queue"
+      class:  "Guest"
+      scheduling: "Rate-Limited (max 4 Mbps total)"
+      bandwidth_min: "1 Mbps"
+      bandwidth_max: "4 Mbps"
+      burst: "32 KB"
+      buffer_size: "128 packets"
+      drop_policy: "Tail Drop"
+      per_user_shaping: true
+      notes: "Heavily restricted, per-client limits"
+
+# DSCP Marking
+
+dscp_marking:
+  description: "Mark packets with DSCP values for QoS"
+  
+  marking_rules:
+    - traffic_class: "Critical (VoIP)"
+      dscp_value: 46  # EF (Expedited Forwarding)
+      binary:  "101110"
+      dscp_name: "EF"
+    
+    - traffic_class: "Critical (Video)"
+      dscp_value: 34  # AF41 (Assured Forwarding 4-1)
+      binary: "100010"
+      dscp_name: "AF41"
+    
+    - traffic_class: "High"
+      dscp_value: 18  # AF21 (Assured Forwarding 2-1)
+      binary: "010010"
+      dscp_name: "AF21"
+    
+    - traffic_class: "Medium"
+      dscp_value: 10  # AF11 (Assured Forwarding 1-1)
+      binary: "001010"
+      dscp_name: "AF11"
+    
+    - traffic_class: "Low/Guest"
+      dscp_value: 8   # CS1 (Class Selector 1)
+      binary: "001000"
+      dscp_name: "CS1"
+    
+    - traffic_class: "Default"
+      dscp_value:  0   # Best Effort
+      binary: "000000"
+      dscp_name: "BE"
+  
+  notes: |
+    DSCP marking is done at network edge (router).
+    Upstream ISP may or may not honor DSCP markings.
+    Internal network should respect DSCP for QoS. 
+
+# Per-User Bandwidth Limits
+
+per_user_limits: 
+  enabled: true
+  
+  policies:
+    - policy_name: "Guest-User-Limit"
+      applies_to: "VLAN 20 (Guest)"
+      download_limit: "10 Mbps"
+      upload_limit:  "5 Mbps"
+      enforcement: "Per IP address"
+      notes: "Prevent single guest from hogging bandwidth"
+    
+    - policy_name: "Contractor-Limit"
+      applies_to:  "Specific contractor IPs"
+      ip_range: "192.168.30.100-192.168.30.120"
+      download_limit: "50 Mbps"
+      upload_limit: "10 Mbps"
+      enforcement: "Per IP address"
+      notes: "Limit contractor bandwidth usage"
+    
+    - policy_name: "No-Limit-Office"
+      applies_to: "VLAN 10 (Office)"
+      download_limit: "unlimited"
+      upload_limit: "unlimited"
+      notes: "Office users get full bandwidth (within class limits)"
+
+# Traffic Shaping
+
+traffic_shaping:
+  enabled: true
+  
+  shaping_policies:
+    - policy_name:  "Shape-Upload"
+      direction: "Upload"
+      interface: "WAN1"
+      total_bandwidth: "20 Mbps"
+      buffer:  "1 MB"
+      notes: "Shape upload to prevent queue buildup at ISP"
+    
+    - policy_name: "Shape-Guest"
+      direction: "Both"
+      applies_to: "VLAN 20"
+      bandwidth_limit: "20% of WAN"
+      enforcement: "Token Bucket"
+      notes: "Guest traffic limited to 4 Mbps upload, 20 Mbps download"
+
+# VoIP Optimization
+
+voip_optimization:
+  enabled: true
+  
+  settings:
+    priority:  "Highest"
+    bandwidth_reservation: "30% (6 Mbps)"
+    max_latency_target: "30 ms"
+    max_jitter_target: "10 ms"
+    max_packet_loss: "1%"
+    
+  codecs:
+    - codec:  "G.711"
+      bandwidth:  "87 kbps (per call)"
+      quality: "High"
+    - codec: "G.729"
+      bandwidth: "32 kbps (per call)"
+      quality: "Medium"
+    - codec: "G.722"
+      bandwidth: "87 kbps (per call)"
+      quality: "HD"
+  
+  concurrent_calls: 
+    bandwidth_reserved: "6 Mbps"
+    codec_assumed: "G.711"
+    max_calls: 68  # 6000 kbps / 87 kbps per call
+    practical_limit: 50  # Leave headroom
+  
+  sip_alg:
+    enabled: false  # Often causes issues, disable if problems
+    notes: "SIP ALG can interfere with VoIP, test and disable if needed"
+  
+  qos_for_voip:
+    - "Classify SIP signaling (UDP 5060-5061) as Critical"
+    - "Classify RTP media (UDP 5004, 16384-32767) as Critical"
+    - "Mark with DSCP EF (46)"
+    - "Use strict priority queue"
+    - "Enable jitter buffer on IP phones"
+    - "Monitor call quality (MOS scores)"
+
+# Monitoring & Statistics
+
+monitoring:
+  metrics_to_track:
+    - metric: "Bandwidth utilization per class"
+      unit: "Mbps"
+      alert_threshold: ">90% for >5 minutes"
+    
+    - metric: "Queue depth"
+      unit: "packets"
+      alert_threshold: ">80% buffer full"
+    
+    - metric:  "Packet drops per class"
+      unit: "packets/sec"
+      alert_threshold:  ">10 drops/sec in Critical class"
+    
+    - metric:  "Latency"
+      unit: "milliseconds"
+      alert_threshold:  ">50ms average"
+    
+    - metric:  "Jitter (for VoIP)"
+      unit: "milliseconds"
+      alert_threshold:  ">20ms"
+  
+  tools:
+    - tool: "DrayTek WebUI Statistics"
+      path: "Applications > Bandwidth Management > Statistics"
+      features:
+        - "Real-time bandwidth usage"
+        - "Per-class utilization"
+        - "Top talkers"
+    
+    - tool: "SNMP Monitoring"
+      description: "Monitor QoS via SNMP (PRTG, LibreNMS)"
+      oids:
+        - "IF-MIB::ifInOctets"
+        - "IF-MIB::ifOutOctets"
+        - "Custom DrayTek QoS OIDs (if available)"
+    
+    - tool: "VoIP Quality Monitoring"
+      description: "Monitor MOS (Mean Opinion Score) for call quality"
+      target:  "MOS > 4.0 (good quality)"
+      methods:
+        - "IP phone built-in stats"
+        - "SIP server call logs"
+        - "Wireshark RTP analysis"
+
+# Testing & Validation
+
+testing:
+  test_scenarios:
+    - test_id: "QOS-001"
+      description: "VoIP call during bandwidth saturation"
+      procedure: |
+        1. Start large file download (saturate bandwidth)
+        2. Make VoIP call
+        3. Measure call quality (latency, jitter, MOS)
+      expected_result: "Call quality remains good despite saturated link"
+      success_criteria: "MOS > 4.0, latency <30ms, jitter <10ms"
+    
+    - test_id: "QOS-002"
+      description: "Guest bandwidth limit"
+      procedure: |
+        1. From guest device, start speed test
+        2. Measure download/upload speed
+      expected_result: "Speed limited to 10 Mbps down, 5 Mbps up"
+      validation: "Speed test shows limits enforced"
+    
+    - test_id: "QOS-003"
+      description: "Business app gets priority over bulk download"
+      procedure: |
+        1. Start bulk FTP download (Low class)
+        2. Access business CRM (High class)
+        3. Measure CRM response time
+      expected_result: "CRM responsive despite FTP download"
+      validation: "CRM latency <100ms"
+    
+    - test_id: "QOS-004"
+      description: "Per-class bandwidth guarantees"
+      procedure: |
+        1. Generate traffic in all classes simultaneously
+        2. Measure bandwidth per class
+      expected_result: "Each class gets at least its guaranteed bandwidth"
+      validation: "Critical:  ≥6 Mbps, High: ≥8 Mbps, Medium: ≥4 Mbps, Low: ≥1 Mbps"
+  
+  tools_for_testing:
+    - tool: "iperf3"
+      usage: "Generate controlled bandwidth load"
+      example: "iperf3 -c server -b 10M -t 60"
+    
+    - tool: "Speed test"
+      usage: "Measure actual throughput"
+      sites: ["fast.com", "speedtest.net"]
+    
+    - tool: "Wireshark"
+      usage: "Analyze packet timing, DSCP markings"
+      filters: ["ip.dscp == 46", "rtp"]
+    
+    - tool: "VoIP call test"
+      usage: "Make actual call and assess quality subjectively"
+      metrics: "Clarity, echo, delay"
+
+# Troubleshooting
+
+troubleshooting:
+  common_issues: 
+    - issue: "VoIP call quality poor"
+      symptoms: "Choppy audio, echo, dropouts"
+      possible_causes:
+        - "QoS not configured"
+        - "Bandwidth insufficient"
+        - "SIP ALG interfering"
+        - "Wrong DSCP marking"
+      solutions:
+        - "Enable QoS, prioritize VoIP"
+        - "Increase bandwidth reservation for Critical class"
+        - "Disable SIP ALG"
+        - "Verify DSCP EF (46) marking"
+    
+    - issue: "Guest users still hogging bandwidth"
+      symptoms: "Guest using more than per-client limit"
+      possible_causes: 
+        - "Per-user limit not configured"
+        - "Multiple devices per guest (different IPs)"
+        - "QoS not applied to correct interface"
+      solutions:
+        - "Configure per-IP bandwidth limit"
+        - "Use MAC-based limiting if multiple IPs"
+        - "Verify QoS applied to WAN interface (upload)"
+    
+    - issue: "Business apps slow despite QoS"
+      symptoms:  "High-priority traffic still delayed"
+      possible_causes: 
+        - "Classification rules wrong"
+        - "ISP not honoring DSCP"
+        - "Bandwidth oversold (too many users)"
+        - "Bottleneck elsewhere (server, switch)"
+      solutions:
+        - "Verify traffic is classified correctly (check stats)"
+        - "Test without ISP (internal traffic)"
+        - "Review total bandwidth vs.  usage"
+        - "Check server/switch performance"
+    
+    - issue: "QoS not working at all"
+      symptoms: "No prioritization observed"
+      possible_causes: 
+        - "QoS not enabled"
+        - "Applied to wrong interface"
+        - "Classification rules don't match traffic"
+        - "Bandwidth settings incorrect"
+      solutions:
+        - "Enable QoS globally"
+        - "Apply QoS policy to WAN interface"
+        - "Review and test classification rules"
+        - "Set correct WAN bandwidth values"
+
+# Best Practices
+
+best_practices: 
+  - practice: "Measure before optimizing"
+    description: "Baseline network performance before enabling QoS"
+  
+  - practice: "Start simple"
+    description: "Begin with 3-4 classes, add complexity if needed"
+  
+  - practice: "Prioritize by business impact"
+    description: "VoIP and critical apps first, bulk downloads last"
+  
+  - practice:  "Test thoroughly"
+    description:  "Validate QoS under load, don't assume it works"
+  
+  - practice: "Monitor continuously"
+    description: "Track bandwidth usage, adjust policies as needed"
+  
+  - practice: "Document everything"
+    description: "Explain why each class exists and what it contains"
+  
+  - practice: "Regular reviews"
+    description: "Review QoS policies quarterly, adjust for new applications"
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial QoS policy documented"
+      - "Defined 5 traffic classes"
+      - "Created classification rules"
+      - "Optimized for VoIP"
+    author: "Lab Admin"
+
+notes: |
+  QoS Configuration Notes:
+  
+  1. QoS is Essential for: 
+     - VoIP (most latency-sensitive)
+     - Video conferencing
+     - Remote desktop (RDP, SSH)
+     - Any real-time application
+  
+  2. Bandwidth is Finite:
+     - QoS doesn't create bandwidth, it manages it
+     - If total demand exceeds capacity, some traffic must wait
+     - QoS ensures critical traffic waits least
+  
+  3. Upload is Usually Bottleneck:
+     - Most connections asymmetric (100 down / 20 up)
+     - Focus QoS on upload direction
+     - VoIP uses upload heavily (sending voice)
+  
+  4. For IHK Documentation:
+     - Explain business justification for each class
+     - Document VoIP optimization (call quality critical)
+     - Show test results (VoIP quality with/without QoS)
+     - Explain DSCP marking strategy
+  
+  5. Advanced Topics:
+     - Application-based classification (DPI)
+     - Per-user fairness within classes
+     - Integration with MPLS/SD-WAN
+     - Dynamic QoS based on time of day
+  
+  6. Real-World Considerations:
+     - ISP may not honor your DSCP markings
+     - Test with ISP to see if they support QoS
+     - Some ISPs offer business QoS (at premium)
+     - Internal QoS always beneficial (within your network)

@@ -1,0 +1,556 @@
+# VLAN-Plan und IP-Adressierung
+# Projekt: DrayTek Enterprise Lab
+# Version: 1.0
+# Datum: 2026-01-05
+
+# Dieses YAML-Dokument dient als "Source of Truth" für die Netzwerk-Konfiguration
+# Es ist NICHT die Router-Config, sondern Dokumentation der Design-Absicht
+
+project:
+  name: "DrayTek Enterprise Lab"
+  organization: "Fachinformatiker Systemintegration Training"
+  site: "Lab Environment"
+  documentation_date: "2026-01-05"
+  maintained_by: "Lab Administrator"
+
+router:
+  model: "DrayTek Vigor 2927ax"
+  firmware: "v4.3.2"
+  hostname: "draytek-lab-router"
+  location: "Lab Room A"
+  management_ip: "192.168.99.1"
+  
+vlans:
+  - id: 10
+    name: "Office"
+    description: "Productive office workstations and resources"
+    subnet: "192.168.10.0/24"
+    network_address: "192.168.10.0"
+    broadcast_address: "192.168.10.255"
+    netmask: "255.255.255.0"
+    cidr: 24
+    usable_ips:  254
+    gateway: "192.168.10.1"
+    security_zone: "LAN"
+    trust_level: "Trusted"
+    
+    dhcp: 
+      enabled: true
+      range_start: "192.168.10.100"
+      range_end: "192.168.10.200"
+      total_dhcp_ips: 101
+      lease_time: 86400  # 24 hours in seconds
+      dns_servers:
+        - "192.168.10.1"  # Router as DNS forwarder
+        - "8.8.8.8"        # Google DNS as fallback
+      domain_name: "office.lab.local"
+      ntp_server: "192.168.10.1"
+      default_gateway: "192.168.10.1"
+    
+    static_assignments:
+      - ip:  "192.168.10.10"
+        hostname: "fileserver01"
+        mac:  "00:11:22:33:44:10"
+        description: "File Server"
+      - ip: "192.168.10.11"
+        hostname: "printer01"
+        mac: "00:11:22:33:44:11"
+        description: "HP LaserJet Pro Printer"
+      - ip: "192.168.10.12"
+        hostname: "printer02"
+        mac: "00:11:22:33:44:12"
+        description: "Canon Scanner/Printer"
+      - ip: "192.168.10.20"
+        hostname: "admin-pc01"
+        mac: "00:11:22:33:44:20"
+        description: "Admin Workstation (also in VLAN 99)"
+    
+    allowed_services:
+      - "HTTP/HTTPS"
+      - "DNS"
+      - "DHCP"
+      - "SMB/CIFS (File Sharing)"
+      - "Printing (LPD, IPP)"
+      - "VPN (outbound)"
+      - "Email (SMTP, IMAP, POP3)"
+    
+    firewall_policies:
+      to_wan: "ALLOW_ALL"
+      to_vlan_20: "DENY_ALL"
+      to_vlan_30: "ALLOW_ALL"
+      to_vlan_99: "ALLOW_ADMINS_ONLY"
+      from_wan: "DENY_ALL (except established)"
+    
+    notes:  |
+      Primary network for employee workstations. 
+      Full internet access. 
+      Access to internal servers and printers.
+      Can access Lab VLAN for testing.
+      Cannot access Guest VLAN (security isolation).
+
+  - id: 20
+    name: "Guest"
+    description: "Guest devices with internet-only access"
+    subnet: "192.168.20.0/24"
+    network_address: "192.168.20.0"
+    broadcast_address: "192.168.20.255"
+    netmask: "255.255.255.0"
+    cidr: 24
+    usable_ips: 254
+    gateway: "192.168.20.1"
+    security_zone: "GUEST"
+    trust_level: "Restricted"
+    
+    dhcp: 
+      enabled: true
+      range_start: "192.168.20.100"
+      range_end: "192.168.20.200"
+      total_dhcp_ips: 101
+      lease_time: 3600  # 1 hour (short for guests)
+      dns_servers:
+        - "8.8.8.8"        # Direct to public DNS
+        - "8.8.4.4"        # Google DNS secondary
+      domain_name: "guest.lab.local"
+      ntp_server: "pool.ntp.org"
+      default_gateway: "192.168.20.1"
+    
+    static_assignments:  []  # No static IPs for guests
+    
+    allowed_services:
+      - "HTTP/HTTPS (Ports 80, 443)"
+      - "DNS (Port 53)"
+      - "NTP (Port 123)"
+    
+    firewall_policies: 
+      to_wan: "ALLOW_HTTP_HTTPS_ONLY"
+      to_vlan_10: "DENY_ALL"
+      to_vlan_30: "DENY_ALL"
+      to_vlan_99: "DENY_ALL"
+      from_wan: "DENY_ALL"
+    
+    bandwidth_limits:
+      per_client_download: "10 Mbps"
+      per_client_upload: "5 Mbps"
+    
+    client_isolation:  true  # Guests cannot see each other
+    
+    notes: |
+      Isolated guest network for visitors.
+      Internet access only (HTTP/HTTPS).
+      No access to internal networks.
+      Client isolation enabled (guests cannot communicate with each other).
+      Short DHCP lease time (1 hour).
+      Bandwidth limited per client. 
+
+  - id: 30
+    name: "Lab"
+    description: "Development and testing environment"
+    subnet:  "192.168.30.0/24"
+    network_address: "192.168.30.0"
+    broadcast_address:  "192.168.30.255"
+    netmask: "255.255.255.0"
+    cidr: 24
+    usable_ips: 254
+    gateway: "192.168.30.1"
+    security_zone: "LAB"
+    trust_level:  "Semi-Trusted"
+    
+    dhcp:
+      enabled: true
+      range_start: "192.168.30.100"
+      range_end: "192.168.30.200"
+      total_dhcp_ips:  101
+      lease_time:  43200  # 12 hours
+      dns_servers:
+        - "192.168.30.1"
+        - "8.8.8.8"
+      domain_name: "lab.local"
+      ntp_server: "192.168.30.1"
+      default_gateway: "192.168.30.1"
+    
+    static_assignments:
+      - ip: "192.168.30.10"
+        hostname: "test-web01"
+        mac: "00:11:22:33:44:30"
+        description: "Test Web Server (Apache/Nginx)"
+      - ip: "192.168.30.11"
+        hostname: "test-db01"
+        mac: "00:11:22:33:44:31"
+        description: "Test Database Server (MySQL/PostgreSQL)"
+      - ip: "192.168.30.20"
+        hostname: "jenkins01"
+        mac: "00:11:22:33:44:32"
+        description: "Jenkins CI/CD Server"
+      - ip:  "192.168.30.50"
+        hostname: "dev-vm01"
+        mac: "00:11:22:33:44:33"
+        description: "Development VM"
+    
+    allowed_services: 
+      - "All (for testing purposes)"
+    
+    firewall_policies: 
+      to_wan: "ALLOW_ALL"
+      to_vlan_10: "ALLOW_ALL"
+      to_vlan_20: "DENY_ALL"
+      to_vlan_99: "ALLOW_ADMINS_ONLY"
+      from_wan: "DENY_ALL (except port forwarding for testing)"
+    
+    notes: |
+      Flexible network for development and testing.
+      Full internet access.
+      Can access Office VLAN (for integration testing).
+      Cannot access Guest VLAN. 
+      Port forwarding from WAN possible for testing (temporary).
+      Less restrictive firewall for development needs.
+
+  - id: 99
+    name: "Management"
+    description: "Network infrastructure management"
+    subnet: "192.168.99.0/24"
+    network_address: "192.168.99.0"
+    broadcast_address: "192.168.99.255"
+    netmask: "255.255.255.0"
+    cidr: 24
+    usable_ips: 254
+    gateway: "192.168.99.1"
+    security_zone: "MGMT"
+    trust_level:  "Highly Trusted"
+    
+    dhcp:
+      enabled: false  # Static IPs only for management! 
+    
+    static_assignments:
+      - ip: "192.168.99.1"
+        hostname: "draytek-router"
+        mac: "00:11:22:33:99:01"
+        description: "DrayTek Vigor 2927ax Router"
+        device_type: "Router"
+      - ip: "192.168.99.2"
+        hostname: "managed-switch01"
+        mac: "00:11:22:33:99:02"
+        description: "Managed Switch"
+        device_type: "Switch"
+      - ip: "192.168.99.3"
+        hostname: "access-point01"
+        mac:  "00:11:22:33:99:03"
+        description: "Wireless Access Point 1"
+        device_type:  "Access Point"
+      - ip: "192.168.99.4"
+        hostname: "access-point02"
+        mac:  "00:11:22:33:99:04"
+        description: "Wireless Access Point 2"
+        device_type: "Access Point"
+      - ip: "192.168.99.10"
+        hostname: "syslog-server"
+        mac: "00:11:22:33:99:10"
+        description: "Syslog Server (Ubuntu 22.04)"
+        device_type: "Server"
+      - ip: "192.168.99.11"
+        hostname: "monitoring-server"
+        mac: "00:11:22:33:99:11"
+        description: "Monitoring Server (PRTG/LibreNMS)"
+        device_type: "Server"
+      - ip: "192.168.99.12"
+        hostname: "radius-server"
+        mac: "00:11:22:33:99:12"
+        description:  "External RADIUS Server (if used)"
+        device_type:  "Server"
+        notes: "Optional - DrayTek has internal RADIUS"
+      - ip: "192.168.99.15"
+        hostname: "backup-server"
+        mac: "00:11:22:33:99:15"
+        description:  "Backup Server"
+        device_type: "Server"
+      - ip: "192.168.99.20"
+        hostname: "admin-laptop01"
+        mac: "00:11:22:33:99:20"
+        description: "Admin Laptop 1"
+        device_type:  "Workstation"
+      - ip: "192.168.99.21"
+        hostname: "admin-laptop02"
+        mac: "00:11:22:33:99:21"
+        description:  "Admin Laptop 2"
+        device_type: "Workstation"
+      - ip: "192.168.99.30"
+        hostname: "admin-workstation01"
+        mac: "00:11:22:33:99:30"
+        description:  "Admin Desktop Workstation"
+        device_type: "Workstation"
+    
+    allowed_services:
+      - "All (full admin access)"
+    
+    firewall_policies: 
+      to_wan: "ALLOW_ALL"
+      to_vlan_10: "ALLOW_ALL"
+      to_vlan_20: "ALLOW_ALL"
+      to_vlan_30: "ALLOW_ALL"
+      from_wan: "DENY_ALL (no management from WAN! )"
+      from_vlan_10: "DENY_ALL (only specific admin IPs allowed)"
+      from_vlan_20: "DENY_ALL"
+      from_vlan_30: "DENY_ALL (only specific admin IPs allowed)"
+    
+    access_restrictions:
+      allowed_source_ips: 
+        - "192.168.99.20-30"  # Admin workstations only
+        - "192.168.10.20"      # Specific admin PC in Office VLAN
+    
+    security_features:
+      - "MAC Address Filtering (on switch ports)"
+      - "802.1X Authentication (optional)"
+      - "Port Security (max 1 MAC per port)"
+      - "SSH Key Authentication (no password)"
+      - "MFA for critical systems (optional)"
+    
+    notes: |
+      CRITICAL:  Highest security zone! 
+      NO DHCP - only static IPs! 
+      Access restricted to admin IPs only.
+      No access from other VLANs (except admins).
+      All management traffic goes through this VLAN.
+      Logging of all access attempts mandatory. 
+      Consider 802.1X for additional security.
+
+# Optional VLANs for advanced scenarios
+
+optional_vlans:
+  - id: 50
+    name: "Server"
+    description: "Server farm (optional)"
+    subnet: "192.168.50.0/24"
+    gateway: "192.168.50.1"
+    dhcp_enabled: false
+    notes: "For dedicated server infrastructure"
+  
+  - id:  60
+    name: "DMZ"
+    description: "Demilitarized Zone for public services"
+    subnet: "192.168.60.0/24"
+    gateway: "192.168.60.1"
+    dhcp_enabled: false
+    notes: "For web/mail servers accessible from internet"
+  
+  - id: 70
+    name: "VoIP"
+    description: "Voice over IP telephony"
+    subnet: "192.168.70.0/24"
+    gateway: "192.168.70.1"
+    dhcp_enabled: true
+    qos_priority: "highest"
+    notes: "Dedicated VLAN for IP phones with QoS"
+
+# Wireless SSIDs mapped to VLANs
+
+wireless: 
+  ssids:
+    - name: "Company-Office"
+      vlan: 10
+      security:  "WPA2-Enterprise"
+      encryption: "AES"
+      authentication: "802.1X RADIUS"
+      radius_server: "192.168.99.1"  # Internal RADIUS
+      radius_port: 1812
+      radius_secret: "PLACEHOLDER_RADIUS_SECRET"
+      visible: true
+      client_isolation: false
+      max_clients: 50
+      notes: "Primary SSID for employees with RADIUS authentication"
+    
+    - name:  "Company-Guest"
+      vlan:  20
+      security: "WPA2-PSK"
+      encryption: "AES"
+      passphrase: "PLACEHOLDER_GUEST_WIFI_PASSWORD"
+      visible: true
+      client_isolation: true
+      max_clients: 20
+      bandwidth_limit: 
+        download: 10000  # kbps
+        upload: 5000     # kbps
+      notes: "Guest network with shared password"
+    
+    - name: "Company-Lab"
+      vlan: 30
+      security: "WPA2-PSK"
+      encryption: "AES"
+      passphrase: "PLACEHOLDER_LAB_WIFI_PASSWORD"
+      visible: false  # Hidden SSID
+      client_isolation:  false
+      max_clients: 20
+      notes: "Development/testing wireless network"
+    
+    - name: "Company-Mgmt"
+      vlan:  99
+      security: "WPA2-Enterprise"
+      encryption: "AES"
+      authentication: "802.1X RADIUS"
+      radius_server: "192.168.99.1"
+      radius_port: 1812
+      radius_secret: "PLACEHOLDER_RADIUS_SECRET"
+      visible: false  # Hidden SSID
+      client_isolation: false
+      max_clients: 10
+      mac_filtering: true
+      notes:  "Admin-only wireless network with RADIUS + MAC filtering"
+
+# DNS Configuration
+
+dns:
+  forwarder:
+    enabled: true
+    upstream_servers:
+      primary: "8.8.8.8"
+      secondary: "8.8.4.4"
+      tertiary: "1.1.1.1"
+    cache_size: 150
+    dnssec: true
+  
+  local_domain: "lab.local"
+  
+  static_records:
+    - hostname: "router"
+      ip: "192.168.99.1"
+    - hostname: "switch"
+      ip: "192.168.99.2"
+    - hostname: "ap1"
+      ip: "192.168.99.3"
+    - hostname: "syslog"
+      ip: "192.168.99.10"
+    - hostname: "monitoring"
+      ip: "192.168.99.11"
+    - hostname: "fileserver"
+      ip: "192.168.10.10"
+
+# NTP Configuration
+
+ntp:
+  enabled: true
+  timezone: "Europe/Berlin"
+  upstream_servers:
+    - "ptbtime1.ptb.de"
+    - "ptbtime2.ptb.de"
+    - "pool.ntp.org"
+  sync_interval: 3600  # seconds
+
+# Routing between VLANs
+
+inter_vlan_routing:
+  enabled: true
+  routing_table:
+    - source: "192.168.10.0/24"
+      destination: "192.168.30.0/24"
+      action: "ALLOW"
+      via: "192.168.10.1"
+    - source: "192.168.10.0/24"
+      destination: "192.168.20.0/24"
+      action:  "DENY"
+    - source: "192.168.30.0/24"
+      destination: "192.168.10.0/24"
+      action: "ALLOW"
+    - source: "192.168.30.0/24"
+      destination: "192.168.20.0/24"
+      action: "DENY"
+    - source: "192.168.20.0/24"
+      destination: "192.168.10.0/24"
+      action: "DENY"
+    - source: "192.168.20.0/24"
+      destination: "192.168.30.0/24"
+      action: "DENY"
+    - source: "192.168.20.0/24"
+      destination: "192.168.99.0/24"
+      action: "DENY"
+    - source: "192.168.99.0/24"
+      destination: "all"
+      action: "ALLOW"
+
+# Documentation & Change Management
+
+change_log:
+  - date: "2026-01-05"
+    version: "1.0"
+    changes:
+      - "Initial VLAN plan created"
+      - "Defined VLANs 10, 20, 30, 99"
+      - "Configured DHCP ranges"
+      - "Defined firewall policies"
+    author: "Lab Administrator"
+  
+  - date: "2026-01-10"
+    version: "1.1"
+    changes:
+      - "Added static IP assignments for servers"
+      - "Configured wireless SSIDs"
+      - "Refined firewall policies"
+    author: "Lab Administrator"
+
+# Validation & Testing
+
+validation_tests:
+  - test_id: "VLAN-001"
+    description: "Verify VLAN 10 DHCP assigns correct IPs"
+    expected:  "Client receives IP in range 192.168.10.100-200"
+    actual: ""
+    status: "PENDING"
+  
+  - test_id: "VLAN-002"
+    description: "Verify inter-VLAN routing Office→Lab"
+    expected: "192.168.10.100 can ping 192.168.30.100"
+    actual: ""
+    status: "PENDING"
+  
+  - test_id: "VLAN-003"
+    description: "Verify Guest isolation from Office"
+    expected: "192.168.20.100 CANNOT ping 192.168.10.100"
+    actual: ""
+    status: "PENDING"
+  
+  - test_id: "WLAN-001"
+    description:  "Verify SSID Company-Office maps to VLAN 10"
+    expected: "Client on Company-Office receives IP 192.168.10.x"
+    actual: ""
+    status: "PENDING"
+
+# Notes & Best Practices
+
+notes:  |
+  This VLAN plan follows enterprise best practices:
+  
+  1. Segmentation by function and trust level
+  2. Management VLAN isolated with highest security
+  3. Guest network completely isolated
+  4. Lab network flexible for development
+  5. All VLANs use consistent /24 subnetting
+  6. DHCP ranges reserve space for static assignments
+  7. Firewall policies follow least-privilege principle
+  
+  For IHK documentation: 
+  - Include this YAML as network design documentation
+  - Create network diagram based on this structure
+  - Document IP assignments in table format
+  - Justify each VLAN's purpose and security level
+  
+  Maintenance: 
+  - Update this file BEFORE making router changes
+  - Use this as "source of truth" for network state
+  - Review quarterly and update as needed
+  - Version control this file with Git
+
+# Compliance & Standards
+
+compliance:
+  standards:
+    - "RFC 1918 - Private Address Space"
+    - "RFC 2131 - DHCP"
+    - "IEEE 802.1Q - VLAN Tagging"
+    - "IEEE 802.1X - Network Access Control"
+  
+  gdpr:
+    personal_data:  "IP addresses logged (see logging policy)"
+    retention: "90 days active, 1 year archive"
+    access_control: "Logs accessible only to admins"
+  
+  security_frameworks:
+    - "BSI IT-Grundschutz"
+    - "CIS Controls"
+    - "NIST Cybersecurity Framework"

@@ -1,0 +1,61 @@
+graph TB
+    subgraph Site_A["Site A - Headquarters<br/>Public IP: 203.0.113.10"]
+        RouterA[DrayTek Router A<br/>LAN: 192.168.10.0/24]
+        LAN_A[Office Network A<br/>PCs, Servers]
+    end
+    
+    subgraph Internet["Internet - Untrusted"]
+        ISP[Public Internet<br/>Untrusted Network]
+    end
+    
+    subgraph Site_B["Site B - Branch Office<br/>Public IP: 203.0.113.20"]
+        RouterB[DrayTek Router B<br/>LAN: 192.168.20.0/24]
+        LAN_B[Office Network B<br/>PCs, Servers]
+    end
+    
+    subgraph Remote_User["Remote User"]
+        Laptop[Laptop with<br/>VPN Client]
+        VPN_IP[VPN IP Pool: <br/>192.168.100.0/24]
+    end
+    
+    RouterA <-->|"IPSec Tunnel<br/>ESP Protocol<br/>Encrypted"| ISP
+    RouterB <-->|"IPSec Tunnel<br/>ESP Protocol<br/>Encrypted"| ISP
+    Laptop <-->|"SSL VPN<br/>TCP 443<br/>Encrypted"| ISP
+    
+    RouterA --- LAN_A
+    RouterB --- LAN_B
+    
+    ISP -. ->|"Plaintext<br/>❌ Interceptable"| ISP
+    
+    subgraph Tunnel_Details["IPSec Site-to-Site Tunnel Details"]
+        direction TB
+        Phase1["Phase 1 (IKE):<br/>- Encryption: AES-256<br/>- Authentication: SHA-256<br/>- DH Group: 14 (2048-bit)<br/>- Lifetime: 28800s (8h)"]
+        Phase2["Phase 2 (IPSec SA):<br/>- Encryption: AES-256<br/>- Authentication: SHA-256<br/>- PFS: Group 14<br/>- Lifetime: 3600s (1h)"]
+        PSK["Authentication: <br/>- Pre-Shared Key (PSK)<br/>- Or X.509 Certificates"]
+        Traffic["Encrypted Traffic: <br/>- 192.168.10.0/24 ↔ 192.168.20.0/24<br/>- Fully encrypted ESP<br/>- UDP 500, 4500 (NAT-T)"]
+    end
+    
+    subgraph SSL_VPN_Details["SSL VPN Remote Access Details"]
+        SSL_Auth["Authentication:<br/>- Username/Password<br/>- Or RADIUS/LDAP/AD<br/>- Optional: 2FA"]
+        SSL_Tunnel["Tunnel Mode:<br/>- Split Tunnel:  Only internal traffic via VPN<br/>- Full Tunnel: All traffic via VPN"]
+        SSL_IP["IP Assignment:<br/>- Pool: 192.168.100.100-150<br/>- DNS: 192.168.10.1<br/>- Routes:  Pushed from server"]
+    end
+    
+    Phase1 --> Phase2
+    Phase2 --> PSK
+    PSK --> Traffic
+    
+    SSL_Auth --> SSL_Tunnel
+    SSL_Tunnel --> SSL_IP
+    
+    classDef router fill:#99ccff,stroke:#0066cc,stroke-width:2px
+    classDef lan fill:#99ff99,stroke:#00cc00,stroke-width:2px
+    classDef internet fill:#ff9999,stroke:#cc0000,stroke-width:2px
+    classDef vpn fill:#ffff99,stroke:#cccc00,stroke-width:2px
+    classDef details fill:#e6e6e6,stroke:#999999,stroke-width:1px
+    
+    class RouterA,RouterB router
+    class LAN_A,LAN_B lan
+    class ISP,Internet internet
+    class Laptop,VPN_IP,Remote_User vpn
+    class Tunnel_Details,Phase1,Phase2,PSK,Traffic,SSL_VPN_Details,SSL_Auth,SSL_Tunnel,SSL_IP details
