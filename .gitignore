@@ -1,7 +1,57 @@
-backups/*.cfg
-backups/*.log
+# Config exports with potential secrets
+config/exports/*. cfg
+config/exports/*.conf
+config/exports/*.txt
+! config/exports/. gitkeep
+
+# Logs
 *. log
-. DS_Store
-*. key
-*. pem
-secrets/
+logs/
+*.pcap
+*.cap
+
+# Credentials and secrets
+*secret*
+*password*
+*credential*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/Editor
+.vscode/
+. idea/
+*.swp
+*. swo
+*~
+.project
+.settings/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.old
+
+# Test outputs
+test-results/
+test-outputs/
+
+# Windows
+*.lnk
+ehthumbs.db
+
+# Linux
+*~
+.directory
+
+# Backups
+backup/
+*.backup
