@@ -1,0 +1,7 @@
+backups/*.cfg
+backups/*.log
+*. log
+. DS_Store
+*. key
+*. pem
+secrets/
