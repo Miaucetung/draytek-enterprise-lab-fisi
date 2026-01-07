@@ -1,0 +1,67 @@
+# Contributing to DrayTek Enterprise Lab
+
+Thank you for your interest in contributing!  This project aims to provide high-quality training materials for IT vocational training (Fachinformatiker Systemintegration).
+
+## 🎯 Contribution Goals
+
+We welcome contributions that: 
+
+- ✅ Improve existing labs with clearer instructions
+- ✅ Add new lab exercises covering additional topics
+- ✅ Fix errors in documentation or configurations
+- ✅ Improve German language quality
+- ✅ Add troubleshooting tips based on real experience
+- ✅ Enhance test scripts
+- ✅ Improve diagrams and visualizations
+- ✅ Add exam-style questions
+
+## 📋 Guidelines
+
+### Lab Submissions
+
+If you want to contribute a new lab exercise:
+
+1. **Follow the established structure**: 
+   - Ziel (Learning objectives)
+   - Voraussetzungen (Prerequisites)
+   - Ausgangslage (Starting state)
+   - Durchführung (Step-by-step instructions)
+   - Validierung (Validation tests)
+   - Fehlerbilder & Troubleshooting (Common mistakes)
+   - Dokumentation (Documentation requirements)
+
+2. **Write in German** for main content (technical terms can remain English where standard)
+
+3. **Use placeholders** for all credentials: 
+   - Passwords: `PLACEHOLDER` or `YOUR_PASSWORD_HERE`
+   - IPs: Use RFC 1918 private addresses consistent with project scheme
+   - Never include real production data
+
+4. **Test thoroughly**:  Ensure all steps work as documented
+
+5. **Include validation commands**:  Provide exact commands to verify success
+
+6. **Add troubleshooting section**: Include at least 5 common mistakes with solutions
+
+7. **Estimated duration**: Include realistic time estimate
+
+8. **Difficulty rating**: Use ⭐ to ⭐⭐⭐⭐ scale
+
+### Documentation Standards
+
+- Use Markdown formatting consistently
+- Include table of contents for longer documents
+- Use code blocks with appropriate language tags
+- Include diagrams where helpful (Mermaid preferred)
+- Cross-reference related documents
+- Keep line length reasonable (120 chars recommended)
+
+### Code Standards
+
+**PowerShell Scripts:**
+```powershell
+# Use approved verbs (Get, Set, Test, etc.)
+# Include comment-based help
+# Parameter validation
+# Error handling with Try/Catch
+# Write-Verbose for detailed output
